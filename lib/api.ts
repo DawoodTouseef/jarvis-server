@@ -28,6 +28,26 @@ interface ApiResponse<T> {
   message?: string
 }
 
+interface HasUsersResponse {
+  has_users: boolean
+}
+interface Groups {
+  model_config :any
+    id: string
+    user_id: string
+
+    name: string
+    description: string
+
+    data: Object
+    meta: Object
+
+    permissions: Object
+    user_ids: Array<string>
+
+    created_at:number
+    updated_at: number
+}
 interface LoginCredentials {
   email: string
   password: string
@@ -35,7 +55,13 @@ interface LoginCredentials {
 interface SignupCredentials {
   email: string
   password: string
-  name: string
+  name: string;
+}
+
+// AddUserForm interface for admin user creation
+interface AddUserForm extends SignupCredentials {
+  profile_image_url?: string;
+  role?: string;
 }
 
 // Extended signup credentials with additional user information
@@ -453,7 +479,7 @@ export interface SignupResponse {
   permissions: string[];
 }
 
-class ApiClient {
+export default class ApiClient {
   private baseUrl: string
   private token: string | null = null
 
@@ -591,6 +617,13 @@ class ApiClient {
     return response
   }
 
+  // Check if there are existing users
+  async hasUsers(): Promise<ApiResponse<HasUsersResponse>> {
+    return this.request<HasUsersResponse>("/api/v1/auths/has-users", {
+      method: "GET",
+    })
+  }
+
   // Analytics Methods with rate limiting
   private async _rateLimitedRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     // Simple rate limiting: delay if requests are too frequent
@@ -719,11 +752,19 @@ class ApiClient {
   }
 
   // Admin User Management
-  async getUsers(): Promise<ApiResponse<any[]>> {
-    return this.request<any[]>("/api/v1/users/", {
+  async getUsers(page: number = 1): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/users/?page=${page}`, {
       method: "GET",
     })
   }
+  
+  async addUser(userData: AddUserForm): Promise<ApiResponse<SignupResponse>> {
+    return this.request<SignupResponse>("/api/v1/auths/add", {
+      method: "POST",
+      body: JSON.stringify(userData),
+    })
+  }
+  
   async getAllUsers(): Promise<ApiResponse<any[]>> {
     return this.request<any[]>("/api/v1/users/all", {
       method: "GET",
@@ -746,7 +787,17 @@ class ApiClient {
       body: JSON.stringify(userData),
     })
   }
-
+  
+  async deleteUser(userId: string): Promise<ApiResponse<boolean>> {
+    return this.request<boolean>(`/api/v1/users/${userId}`, {
+      method: "DELETE",
+    })
+  }
+  async getUser(userId: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/users`, {
+      method: "GET",
+    })
+  }
   // Admin Configuration
   async getAdminConfig(): Promise<ApiResponse<ApiAdminConfig>> {
     return this.request<ApiAdminConfig>("/api/v1/auths/admin/config", {
@@ -1414,6 +1465,27 @@ class ApiClient {
     return this.request<any>("/api/v1/audio/config/update", {
       method: "POST",
       body: JSON.stringify(config),
+    })
+  }
+  async getgroups():Promise<ApiResponse<any>>{
+    return this.request<any>("/api/v1/groups/")
+  }
+  async addGroup(groupData: any): Promise<ApiResponse<any>> {
+    return this.request<any>("/api/v1/groups/create", {
+      method: "POST",
+      body: JSON.stringify(groupData),
+    })
+  }
+  async updateGroup(groupData: any): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/groups/id/${groupData.id}/update`, {
+      method: "POST",
+      body: JSON.stringify(groupData),
+    })
+  }
+  
+  async deleteGroup(groupId: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/groups/id/${groupId}/delete`, {
+      method: "DELETE",
     })
   }
 }

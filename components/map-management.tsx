@@ -41,9 +41,44 @@ import {
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { io, Socket } from "socket.io-client";
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents,useMapEvent } from "react-leaflet";
 
+// Map layer types
+type MapLayer = 'street' | 'satellite' | 'terrain' | 'night' | 'hybrid';
 
-// Define types for Home Assistant entities
+// Directions types
+type TransportMode = 'car' | 'walk' | 'bike' | 'train' | 'bus';
+
+interface RouteStep {
+  instruction: string;
+  distance: number;
+  duration: number;
+  maneuver: string;
+  location: [number, number];
+}
+
+interface RouteData {
+  distance: number;
+  duration: number;
+  coordinates: [number, number][];
+  steps: RouteStep[];
+}
+
+// Smart interactions types
+interface ContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  lat: number;
+  lng: number;
+}
+
+interface RoutePoint {
+  id: string;
+  position: [number, number];
+  type: 'start' | 'end' | 'waypoint';
+}
+
 interface EntityState {
   entity_id: string;
   state: string;
@@ -63,10 +98,23 @@ interface EntityStateChangedData {
   };
 }
 
-// Map layer types
-type MapLayer = 'street' | 'satellite' | 'terrain';
-
-export default function MapManagement() {
+function MapManagement() {
+  const [MapContainer, setMapContainer] = useState<any>(null);
+  const [TileLayer, setTileLayer] = useState<any>(null);
+  const [Marker, setMarker] = useState<any>(null);
+  const [Popup, setPopup] = useState<any>(null);
+  const [useMap, setUseMap] = useState<any>(null);
+  const [useMapEvents, setUseMapEvents] = useState<any>(null);
+  const [L, setL] = useState<any>(null);
+  const [CircleMarker, setCircleMarker] = useState<any>(null);
+  const [Polyline, setPolyline] = useState<any>(null);
+  
+  const [entities, setEntities] = useState<EntityState[]>([]);
+  const [deviceLocations, setDeviceLocations] = useState<{[key: string]: [number, number]}>({});
+  const [loading, setLoading] = useState(true);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [mapInstance, setMapInstance] = useState<any>(null);
+  
   const [isClient, setIsClient] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,13 +125,55 @@ export default function MapManagement() {
   const [markerPosition, setMarkerPosition] = useState<[number, number] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [autocompleteResults, setAutocompleteResults] = useState<any[]>([]);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [selectedEntity, setSelectedEntity] = useState<EntityState | null>(null);
   const [isEntitySheetOpen, setIsEntitySheetOpen] = useState(false);
   const [mapLayer, setMapLayer] = useState<MapLayer>('street');
   const [zoomLevel, setZoomLevel] = useState(13);
   const [filteredEntities, setFilteredEntities] = useState<string[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  // Directions state
+  const [fromLocation, setFromLocation] = useState("");
+  const [toLocation, setToLocation] = useState("");
+  const [transportMode, setTransportMode] = useState<TransportMode>('car');
+  const [routeData, setRouteData] = useState<RouteData | null>(null);
+  const [isDirectionsOpen, setIsDirectionsOpen] = useState(false);
+  const [isGettingDirections, setIsGettingDirections] = useState(false);
+  
+  // New state for Google Maps features
+  const [showTraffic, setShowTraffic] = useState(false);
+  const [showTransit, setShowTransit] = useState(false);
+  const [showWeather, setShowWeather] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Navigation state
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [userPosition, setUserPosition] = useState<[number, number] | null>(null);
+  const [nextTurn, setNextTurn] = useState<string>('');
+  const [distanceToNextTurn, setDistanceToNextTurn] = useState<number>(0);
+  const [eta, setEta] = useState<string>('');
+  const navigationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Add new state variables for smart interactions
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    visible: false,
+    x: 0,
+    y: 0,
+    lat: 0,
+    lng: 0
+  });
+  
+  const [routePoints, setRoutePoints] = useState<RoutePoint[]>([]);
+  
+  // Add new state variables for user personalization
+  const [customMarkers, setCustomMarkers] = useState<RoutePoint[]>([]);
+  const [weatherData, setWeatherData] = useState<any>(null);
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
+  
   const getCurrentLocation = () => {
     // Prevent multiple concurrent requests
     if (isLocatingRef.current) {
@@ -237,7 +327,53 @@ export default function MapManagement() {
     }, 1);
   };
   
-  // Search functionality with autocomplete
+  // Debounced search for autocomplete suggestions
+  const fetchAutocompleteResults = async (query: string) => {
+    if (!query.trim()) {
+      setAutocompleteResults([]);
+      return;
+    }
+    
+    try {
+      // Call OpenStreetMap Nominatim API for autocomplete suggestions
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch autocomplete results');
+      }
+      
+      const results = await response.json();
+      setAutocompleteResults(results);
+    } catch (error) {
+      console.error('Autocomplete error:', error);
+      setAutocompleteResults([]);
+    }
+  };
+  
+  // Handle search query changes with debounce
+  const handleSearchQueryChange = (query: string) => {
+    setSearchQuery(query);
+    
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Set new timeout for autocomplete
+    if (query.trim()) {
+      searchTimeoutRef.current = setTimeout(() => {
+        fetchAutocompleteResults(query);
+        setShowAutocomplete(true);
+      }, 300); // 300ms debounce
+    } else {
+      setAutocompleteResults([]);
+      setShowAutocomplete(false);
+    }
+  };
+  
+  // Search functionality
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -247,6 +383,9 @@ export default function MapManagement() {
       if (!searchHistory.includes(searchQuery)) {
         setSearchHistory(prev => [searchQuery, ...prev.slice(0, 4)]);
       }
+      
+      // Hide autocomplete
+      setShowAutocomplete(false);
       
       // Call OpenStreetMap Nominatim API for geocoding
       const response = await fetch(
@@ -289,6 +428,288 @@ export default function MapManagement() {
     }
   };
   
+  // Toggle favorite location
+  const toggleFavorite = (location: string) => {
+    setFavorites(prev => 
+      prev.includes(location) 
+        ? prev.filter(fav => fav !== location) 
+        : [...prev, location]
+    );
+  };
+  
+  // Get directions functionality
+  const handleGetDirections = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fromLocation.trim() || !toLocation.trim()) return;
+    
+    setIsGettingDirections(true);
+    setError(null);
+    
+    try {
+      // Check if API key is available
+      const apiKey = process.env.OPENROUTESERVICE_API_KEY || 'YOUR_API_KEY_HERE';
+      
+      if (apiKey === 'YOUR_API_KEY_HERE') {
+        // Use mock data when no API key is available
+        console.warn('No OpenRouteService API key found, using mock data');
+        
+        // Generate mock route data
+        const mockRouteData: RouteData = {
+          distance: 15.5, // km
+          duration: 30, // minutes
+          coordinates: [
+            [mapCenter[0], mapCenter[1]],
+            [mapCenter[0] + 0.01, mapCenter[1] + 0.01],
+            [mapCenter[0] + 0.02, mapCenter[1] + 0.02],
+            [mapCenter[0] + 0.03, mapCenter[1] + 0.03]
+          ],
+          steps: [
+            {
+              instruction: "Head northeast on Main St toward 1st Ave",
+              distance: 0.5,
+              duration: 2,
+              maneuver: "turn-left",
+              location: [mapCenter[0], mapCenter[1]]
+            },
+            {
+              instruction: "Turn left onto 2nd Ave",
+              distance: 1.2,
+              duration: 5,
+              maneuver: "turn-left",
+              location: [mapCenter[0] + 0.01, mapCenter[1] + 0.01]
+            },
+            {
+              instruction: "Continue straight for 2 km",
+              distance: 2.0,
+              duration: 8,
+              maneuver: "straight",
+              location: [mapCenter[0] + 0.02, mapCenter[1] + 0.02]
+            },
+            {
+              instruction: "Turn right onto Destination St",
+              distance: 0.8,
+              duration: 3,
+              maneuver: "turn-right",
+              location: [mapCenter[0] + 0.03, mapCenter[1] + 0.03]
+            },
+            {
+              instruction: "Arrive at your destination",
+              distance: 0,
+              duration: 0,
+              maneuver: "arrive",
+              location: [mapCenter[0] + 0.03, mapCenter[1] + 0.03]
+            }
+          ]
+        };
+        
+        setRouteData(mockRouteData);
+        
+        // Fly to the route bounds
+        if (mapRef.current && mapRef.current.fitBounds) {
+          const bounds = [
+            [Math.min(...mockRouteData.coordinates.map((c: [number, number]) => c[0])), Math.min(...mockRouteData.coordinates.map((c: [number, number]) => c[1]))],
+            [Math.max(...mockRouteData.coordinates.map((c: [number, number]) => c[0])), Math.max(...mockRouteData.coordinates.map((c: [number, number]) => c[1]))]
+          ];
+          mapRef.current.fitBounds(bounds, { padding: [50, 50], duration: 1.5, animate: true });
+        }
+        
+        setError("Using mock data. Add OPENROUTESERVICE_API_KEY to .env for real directions.");
+        setTimeout(() => setError(null), 5000);
+        return;
+      }
+      
+      // Get coordinates for from and to locations
+      const fromCoords = await geocodeLocation(fromLocation);
+      const toCoords = await geocodeLocation(toLocation);
+      
+      if (!fromCoords || !toCoords) {
+        throw new Error('Could not geocode one or both locations');
+      }
+      
+      // Type guard to ensure fromCoords and toCoords are not null
+      if (!fromCoords || !toCoords) {
+        throw new Error('Could not geocode one or both locations');
+      }
+      
+      // Map transport modes to OpenRouteService profiles
+      const profileMap = {
+        'car': 'driving-car',
+        'walk': 'foot-walking',
+        'bike': 'cycling-regular',
+        'train': 'driving-car', // Using car as default for train (would need transit API for real implementation)
+        'bus': 'driving-car'    // Using car as default for bus (would need transit API for real implementation)
+      };
+      
+      const profile = profileMap[transportMode] || 'driving-car';
+      
+      // Call OpenRouteService API for directions
+      const response = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': apiKey,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          coordinates: [
+            [fromCoords.lon, fromCoords.lat],
+            [toCoords.lon, toCoords.lat]
+          ],
+          format: 'geojson',
+          instructions: 'true'
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch directions: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Extract route information
+      const route = data.features[0];
+      const coordinates = route.geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]]); // Convert [lon, lat] to [lat, lon]
+      
+      // Extract steps and convert to our format
+      const steps: RouteStep[] = route.properties.segments[0].steps.map((step: any) => ({
+        instruction: step.instruction,
+        distance: step.distance / 1000, // Convert meters to km
+        duration: step.duration / 60,   // Convert seconds to minutes
+        maneuver: step.type,
+        location: [step.way_points[0] ? coordinates[step.way_points[0]][0] : coordinates[0][0], 
+                  step.way_points[0] ? coordinates[step.way_points[0]][1] : coordinates[0][1]]
+      }));
+      
+      const routeData: RouteData = {
+        distance: route.properties.segments[0].distance / 1000, // Convert meters to km
+        duration: route.properties.segments[0].duration / 60,   // Convert seconds to minutes
+        coordinates: coordinates,
+        steps: steps
+      };
+      
+      setRouteData(routeData);
+      
+      // Fly to the route bounds
+      if (mapRef.current && mapRef.current.fitBounds) {
+        const bounds = [
+          [Math.min(...coordinates.map((c: [number, number]) => c[0])), Math.min(...coordinates.map((c: [number, number]) => c[1]))],
+          [Math.max(...coordinates.map((c: [number, number]) => c[0])), Math.max(...coordinates.map((c: [number, number]) => c[1]))]
+        ];
+        mapRef.current.fitBounds(bounds, { padding: [50, 50], duration: 1.5, animate: true });
+      }
+    } catch (error) {
+      console.error('Directions error:', error);
+      setError(`Failed to get directions: ${(error as Error).message || 'Please try again.'}`);
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setIsGettingDirections(false);
+    }
+  };
+  
+  // Geocode a location using OpenStreetMap Nominatim
+  const geocodeLocation = async (location: string) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to geocode location');
+      }
+      
+      const results = await response.json();
+      
+      if (results.length === 0) {
+        return null;
+      }
+      
+      const result = results[0];
+      return {
+        lat: parseFloat(result.lat),
+        lon: parseFloat(result.lon)
+      };
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      return null;
+    }
+  };
+  
+  // Start navigation simulation
+  const startNavigation = () => {
+    if (!routeData || !routeData.coordinates.length) return;
+    
+    setIsNavigating(true);
+    setCurrentStep(0);
+    setUserPosition([routeData.coordinates[0][0], routeData.coordinates[0][1]]);
+    
+    // Clear any existing interval
+    if (navigationIntervalRef.current) {
+      clearInterval(navigationIntervalRef.current);
+    }
+    
+    // Set up navigation simulation
+    navigationIntervalRef.current = setInterval(() => {
+      setCurrentStep(prevStep => {
+        const nextStep = prevStep + 1;
+        
+        // If we've reached the end of the route
+        if (nextStep >= routeData.coordinates.length) {
+          if (navigationIntervalRef.current) {
+            clearInterval(navigationIntervalRef.current);
+          }
+          setIsNavigating(false);
+          return prevStep;
+        }
+        
+        // Update user position
+        setUserPosition([routeData.coordinates[nextStep][0], routeData.coordinates[nextStep][1]]);
+        
+        // Update next turn information
+        if (nextStep < routeData.steps.length) {
+          setNextTurn(routeData.steps[nextStep].instruction);
+          setDistanceToNextTurn(routeData.steps[nextStep].distance);
+          
+          // Calculate ETA (simplified)
+          const remainingSteps = routeData.steps.length - nextStep;
+          const avgTimePerStep = routeData.duration / routeData.steps.length;
+          const remainingTime = remainingSteps * avgTimePerStep;
+          setEta(`${Math.round(remainingTime)} min`);
+        }
+        
+        // Fly to user position
+        if (mapRef.current && mapRef.current.flyTo) {
+          mapRef.current.flyTo([routeData.coordinates[nextStep][0], routeData.coordinates[nextStep][1]], 18, {
+            animate: true,
+            duration: 1.0
+          });
+        }
+        
+        return nextStep;
+      });
+    }, 2000); // Move to next step every 2 seconds
+  };
+  
+  // Stop navigation simulation
+  const stopNavigation = () => {
+    if (navigationIntervalRef.current) {
+      clearInterval(navigationIntervalRef.current);
+    }
+    setIsNavigating(false);
+    setUserPosition(null);
+    setNextTurn('');
+    setDistanceToNextTurn(0);
+    setEta('');
+  };
+  
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (navigationIntervalRef.current) {
+        clearInterval(navigationIntervalRef.current);
+      }
+    };
+  }, []);
+  
   // Filter entities by type
   const toggleEntityFilter = (entityType: string) => {
     setFilteredEntities(prev => 
@@ -322,6 +743,29 @@ export default function MapManagement() {
     };
   }, [error]);
   
+  // Function to fetch weather data for a location
+  const fetchWeatherData = async (lat: number, lng: number) => {
+    setIsWeatherLoading(true);
+    try {
+      // In a real implementation, you would call a weather API like OpenWeatherMap
+      // For now, we'll use mock data
+      const mockWeatherData = {
+        location: `${lat.toFixed(2)}, ${lng.toFixed(2)}`,
+        temperature: Math.floor(Math.random() * 30) + 10, // Random temp between 10-40°C
+        condition: ['Sunny', 'Cloudy', 'Rainy', 'Partly Cloudy'][Math.floor(Math.random() * 4)],
+        humidity: Math.floor(Math.random() * 50) + 30, // Random humidity 30-80%
+        windSpeed: (Math.random() * 20).toFixed(1), // Random wind speed 0-20 km/h
+        icon: ['☀️', '☁️', '🌧️', '⛅'][Math.floor(Math.random() * 4)]
+      };
+      setWeatherData(mockWeatherData);
+    } catch (error) {
+      console.error('Error fetching weather data:', error);
+      setWeatherData(null);
+    } finally {
+      setIsWeatherLoading(false);
+    }
+  };
+  
   if (!isClient) {
     return (
       <div className="w-full h-full flex flex-col">
@@ -340,74 +784,189 @@ export default function MapManagement() {
   }
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <Card className="flex-1 border-0 rounded-none relative">
-        <CardContent className="p-0 h-full">
-          <div className="h-full w-full">
-            <MapComponent 
-              isLocating={isLocating} 
-              setIsLocating={setIsLocating} 
-              mapRef={mapRef} 
-              getCurrentLocation={getCurrentLocation}
-              error={error}
-              setError={setError}
-              markerPosition={markerPosition}
-              mapCenter={mapCenter}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              searchHistory={searchHistory}
-              setSearchHistory={setSearchHistory}
-              handleSearch={handleSearch}
-              selectedEntity={selectedEntity}
-              setSelectedEntity={setSelectedEntity}
-              isEntitySheetOpen={isEntitySheetOpen}
-              setIsEntitySheetOpen={setIsEntitySheetOpen}
-              mapLayer={mapLayer}
-              setMapLayer={setMapLayer}
-              zoomLevel={zoomLevel}
-              setZoomLevel={setZoomLevel}
-              filteredEntities={filteredEntities}
-              toggleEntityFilter={toggleEntityFilter}
-              isDarkMode={isDarkMode}
-              setIsDarkMode={setIsDarkMode}
-            />
-          </div>
-        </CardContent>
-      </Card>
-      
+    <div className="w-full h-full flex relative overflow-hidden">
+      {/* Google Maps Style Layout */}
+      <div className="flex-1 flex flex-col h-full relative">
+        <MapComponent 
+          isLocating={isLocating} 
+          setIsLocating={setIsLocating} 
+          mapRef={mapRef} 
+          getCurrentLocation={getCurrentLocation}
+          error={error}
+          setError={setError}
+          markerPosition={markerPosition}
+          mapCenter={mapCenter}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          searchHistory={searchHistory}
+          setSearchHistory={setSearchHistory}
+          autocompleteResults={autocompleteResults}
+          setAutocompleteResults={setAutocompleteResults}
+          showAutocomplete={showAutocomplete}
+          setShowAutocomplete={setShowAutocomplete}
+          handleSearchQueryChange={handleSearchQueryChange}
+          handleSearch={handleSearch}
+          selectedEntity={selectedEntity}
+          setSelectedEntity={setSelectedEntity}
+          isEntitySheetOpen={isEntitySheetOpen}
+          setIsEntitySheetOpen={setIsEntitySheetOpen}
+          mapLayer={mapLayer}
+          setMapLayer={setMapLayer}
+          zoomLevel={zoomLevel}
+          setZoomLevel={setZoomLevel}
+          filteredEntities={filteredEntities}
+          toggleEntityFilter={toggleEntityFilter}
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
+          // Directions props
+          fromLocation={fromLocation}
+          setFromLocation={setFromLocation}
+          toLocation={toLocation}
+          setToLocation={setToLocation}
+          transportMode={transportMode}
+          setTransportMode={setTransportMode}
+          routeData={routeData}
+          setRouteData={setRouteData}
+          isDirectionsOpen={isDirectionsOpen}
+          setIsDirectionsOpen={setIsDirectionsOpen}
+          isGettingDirections={isGettingDirections}
+          setIsGettingDirections={setIsGettingDirections}
+          handleGetDirections={handleGetDirections}
+          // Google Maps features
+          showTraffic={showTraffic}
+          setShowTraffic={setShowTraffic}
+          showTransit={showTransit}
+          setShowTransit={setShowTransit}
+          showWeather={showWeather}
+          setShowWeather={setShowWeather}
+          favorites={favorites}
+          setFavorites={setFavorites}
+          isSidebarCollapsed={isSidebarCollapsed}
+          setIsSidebarCollapsed={setIsSidebarCollapsed}
+          toggleFavorite={toggleFavorite}
+          // Navigation features
+          isNavigating={isNavigating}
+          setIsNavigating={setIsNavigating}
+          currentStep={currentStep}
+          setCurrentStep={setCurrentStep}
+          userPosition={userPosition}
+          setUserPosition={setUserPosition}
+          nextTurn={nextTurn}
+          setNextTurn={setNextTurn}
+          distanceToNextTurn={distanceToNextTurn}
+          setDistanceToNextTurn={setDistanceToNextTurn}
+          eta={eta}
+          setEta={setEta}
+          startNavigation={startNavigation}
+          stopNavigation={stopNavigation}
+          // Smart interactions
+          contextMenu={contextMenu}
+          setContextMenu={setContextMenu}
+          routePoints={routePoints}
+          setRoutePoints={setRoutePoints}
+          setMarkerPosition={setMarkerPosition}
+          // User personalization
+          customMarkers={customMarkers}
+          setCustomMarkers={setCustomMarkers}
+          weatherData={weatherData}
+          isWeatherLoading={isWeatherLoading}
+          fetchWeatherData={fetchWeatherData}
+        />
+      </div>
     </div>
   );
+};
+
+// Update the MapComponent props interface
+interface MapComponentProps {
+  isLocating: boolean;
+  setIsLocating: (isLocating: boolean) => void;
+  mapRef: React.MutableRefObject<any>;
+  getCurrentLocation: () => void;
+  error: string | null;
+  setError: (error: string | null) => void;
+  markerPosition: [number, number] | null;
+  mapCenter: [number, number];
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  searchHistory: string[];
+  setSearchHistory: (history: string[]) => void;
+  autocompleteResults: any[];
+  setAutocompleteResults: (results: any[]) => void;
+  showAutocomplete: boolean;
+  setShowAutocomplete: (show: boolean) => void;
+  handleSearchQueryChange: (query: string) => void;
+  handleSearch: (e: React.FormEvent) => void;
+  selectedEntity: EntityState | null;
+  setSelectedEntity: (entity: EntityState | null) => void;
+  isEntitySheetOpen: boolean;
+  setIsEntitySheetOpen: (isOpen: boolean) => void;
+  mapLayer: MapLayer;
+  setMapLayer: (layer: MapLayer) => void;
+  zoomLevel: number;
+  setZoomLevel: (level: number) => void;
+  filteredEntities: string[];
+  toggleEntityFilter: (entityType: string) => void;
+  isDarkMode: boolean;
+  setIsDarkMode: (isDarkMode: boolean) => void;
+  // Directions props
+  fromLocation: string;
+  setFromLocation: (location: string) => void;
+  toLocation: string;
+  setToLocation: (location: string) => void;
+  transportMode: TransportMode;
+  setTransportMode: (mode: TransportMode) => void;
+  routeData: RouteData | null;
+  setRouteData: (data: RouteData | null) => void;
+  isDirectionsOpen: boolean;
+  setIsDirectionsOpen: (isOpen: boolean) => void;
+  isGettingDirections: boolean;
+  setIsGettingDirections: (isGetting: boolean) => void;
+  handleGetDirections: (e: React.FormEvent) => void;
+  // Google Maps features
+  showTraffic: boolean;
+  setShowTraffic: (show: boolean) => void;
+  showTransit: boolean;
+  setShowTransit: (show: boolean) => void;
+  showWeather: boolean;
+  setShowWeather: (show: boolean) => void;
+  favorites: string[];
+  setFavorites: (favorites: string[]) => void;
+  toggleFavorite: (location: string) => void;
+  isSidebarCollapsed: boolean;
+  setIsSidebarCollapsed: (isCollapsed: boolean) => void;
+  // Navigation state
+  isNavigating: boolean;
+  setIsNavigating: (isNavigating: boolean) => void;
+  currentStep: number;
+  setCurrentStep: (step: number) => void;
+  userPosition: [number, number] | null;
+  setUserPosition: (position: [number, number] | null) => void;
+  nextTurn: string;
+  setNextTurn: (turn: string) => void;
+  distanceToNextTurn: number;
+  setDistanceToNextTurn: (distance: number) => void;
+  eta: string;
+  setEta: (eta: string) => void;
+  startNavigation: () => void;
+  stopNavigation: () => void;
+  // Smart interactions
+  contextMenu: ContextMenuState;
+  setContextMenu: (contextMenu: ContextMenuState) => void;
+  routePoints: RoutePoint[];
+  setRoutePoints: (points: RoutePoint[]) => void;
+  setMarkerPosition: (position: [number, number] | null) => void;
+  // User personalization
+  customMarkers: RoutePoint[];
+  setCustomMarkers: (markers: RoutePoint[]) => void;
+  weatherData: any;
+  isWeatherLoading: boolean;
+  fetchWeatherData: (lat: number, lng: number) => void;
 }
 
-// Client-side only map component
-const MapComponent = (props: {
-  isLocating: boolean, 
-  setIsLocating: (value: boolean) => void, 
-  mapRef: React.MutableRefObject<any>, 
-  getCurrentLocation: () => void, 
-  error: string | null, 
-  setError: (error: string | null) => void,
-  markerPosition: [number, number] | null,
-  mapCenter: [number, number],
-  searchQuery: string,
-  setSearchQuery: (query: string) => void,
-  searchHistory: string[],
-  setSearchHistory: (history: string[]) => void,
-  handleSearch: (e: React.FormEvent) => void,
-  selectedEntity: EntityState | null,
-  setSelectedEntity: (entity: EntityState | null) => void,
-  isEntitySheetOpen: boolean,
-  setIsEntitySheetOpen: (open: boolean) => void,
-  mapLayer: MapLayer,
-  setMapLayer: (layer: MapLayer) => void,
-  zoomLevel: number,
-  setZoomLevel: (zoom: number) => void,
-  filteredEntities: string[],
-  toggleEntityFilter: (entityType: string) => void,
-  isDarkMode: boolean,
-  setIsDarkMode: (isDark: boolean) => void
-}) => {
+const MapComponent: React.FC<MapComponentProps> = (props) => {
   const [MapContainer, setMapContainer] = useState<any>(null);
+  const [Polyline, setPolyline] = useState<any>(null);
   const [TileLayer, setTileLayer] = useState<any>(null);
   const [Marker, setMarker] = useState<any>(null);
   const [Popup, setPopup] = useState<any>(null);
@@ -421,7 +980,9 @@ const MapComponent = (props: {
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
-  
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
+  const [weatherData, setWeatherData] = useState<any>(null);
+  const [isWeatherIconVisible, setIsWeatherIconVisible] = useState(false);
   // Function to get user location icon (profile marker or home icon) with modern design
   const getUserLocationIcon = (state?: string) => {
     if (!L) return null;
@@ -624,6 +1185,7 @@ const MapComponent = (props: {
         setUseMap(() => reactLeafletModule.useMap);
         setUseMapEvents(() => reactLeafletModule.useMapEvents);
         setCircleMarker(() => reactLeafletModule.CircleMarker);
+        setPolyline(() => reactLeafletModule.Polyline);
       } catch (error) {
         console.error('Error loading Leaflet components:', error);
       }
@@ -681,9 +1243,29 @@ const MapComponent = (props: {
     };
   };
 
-  // Custom component to handle map events
+  // Custom component to handle map events including right-click
   const MapEventHandler = () => {
     const map = useMapEvents({
+      contextmenu: (e: any) => {
+        // Show context menu on right-click
+        props.setContextMenu({
+          visible: true,
+          x: e.originalEvent.clientX,
+          y: e.originalEvent.clientY,
+          lat: e.latlng.lat,
+          lng: e.latlng.lng
+        });
+      },
+      click: () => {
+        // Hide context menu on map click
+        props.setContextMenu({
+          visible: false,
+          x: 0,
+          y: 0,
+          lat: 0,
+          lng: 0
+        });
+      },
       zoomstart: () => {
         // Add a class to indicate zooming for smooth transitions
         const container = map.getContainer();
@@ -784,283 +1366,196 @@ const MapComponent = (props: {
       props.setIsDarkMode(!props.isDarkMode);
     };
     
+    const toggleSidebar = () => {
+      props.setIsSidebarCollapsed(!props.isSidebarCollapsed);
+    };
+    
     return (
       <>
-        {/* Top Controls - Compact Header */}
+        {/* Google Maps Style Top Bar */}
         <div className="leaflet-top leaflet-left w-full">
           <div className="leaflet-control w-full px-4 py-3">
-            <div className="flex items-center justify-between gap-3 sm:gap-2">
-              {/* Search Bar with Frosted Glass Effect and Autocomplete */}
-              <div className="flex-1 max-w-2xl relative md:max-w-xl sm:max-w-md">
-                <form onSubmit={props.handleSearch} className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 z-10" />
-                  <Input
-                    type="text"
-                    placeholder="Search for places..."
-                    value={props.searchQuery}
-                    onChange={(e) => props.setSearchQuery(e.target.value)}
-                    className="pl-10 pr-10 py-2 w-full glass rounded-full border-0 shadow-lg backdrop-blur-md bg-white/20 dark:bg-black/20 focus:bg-white/30 dark:focus:bg-black/30 transition-all duration-300 ease-in-out placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                  />
-                  {props.searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => props.setSearchQuery("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors duration-200"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </form>
-                
-                {/* Search History Dropdown */}
-                {props.searchQuery.length === 0 && props.searchHistory.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 glass z-20 max-h-60 overflow-y-auto custom-scrollbar rounded-xl">
-                    <div className="py-2">
-                      <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex justify-between items-center">
-                        <span>Recent Searches</span>
-                        <button 
-                          onClick={() => props.setSearchHistory([])}
-                          className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors duration-200"
-                        >
-                          Clear All
-                        </button>
-                      </div>
-                      {props.searchHistory.map((query, index) => (
-                        <div key={index} className="flex items-center justify-between px-4 py-2 hover:bg-white/50 dark:hover:bg-black/50 transition-colors duration-200 rounded-lg mx-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              props.setSearchQuery(query);
-                              // Submit the search
-                              const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-                              props.handleSearch(fakeEvent);
-                            }}
-                            className="flex-1 text-left flex items-center gap-3 py-1"
-                          >
-                            <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">{query}</span>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const newHistory = [...props.searchHistory];
-                              newHistory.splice(index, 1);
-                              props.setSearchHistory(newHistory);
-                            }}
-                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors duration-200 p-1"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Autocomplete Suggestions */}
-                {props.searchQuery.length > 2 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 glass z-20 max-h-60 overflow-y-auto custom-scrollbar rounded-xl">
-                    <div className="py-2">
-                      <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Search Suggestions
-                      </div>
-                      <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-                        Showing results for "{props.searchQuery}"
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Theme Toggle */}
+            <div className="flex items-center gap-3">
+              {/* Sidebar Toggle Button */}
               <button
                 type="button"
-                onClick={toggleTheme}
-                className="flex items-center justify-center bg-white/30 dark:bg-black/30 hover:bg-white/50 dark:hover:bg-black glass rounded-full h-10 w-10 p-0 transition-all shadow-lg backdrop-blur-md md:flex hidden hover:shadow-xl duration-300 ease-in-out"
-                aria-label="Toggle theme"
+                onClick={toggleSidebar}
+                className="flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full h-10 w-10 p-0 transition-all shadow-md hover:shadow-lg duration-200 ease-in-out"
+                aria-label="Toggle sidebar"
               >
-                {props.isDarkMode ? (
-                  <Sun className="w-5 h-5 text-yellow-500" />
-                ) : (
-                  <Moon className="w-5 h-5 text-gray-700" />
-                )}
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                  <line x1="3" y1="12" x2="21" y2="12"></line>
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
               </button>
+              
             </div>
           </div>
         </div>
         
-        {/* Right Controls - Vertical Toolbar (Responsive) */}
-        <div className="leaflet-top leaflet-right mt-24 md:mt-24 sm:mt-20">
-          <div className="leaflet-control flex flex-col gap-2 p-2 bg-white/30 dark:bg-black/30 glass rounded-2xl shadow-xl backdrop-blur-md border border-white/20 dark:border-black/20">
-            {/* Location Button */}
-            <button 
-              type="button" 
-              onClick={props.getCurrentLocation}
-              disabled={props.isLocating}
-              className="flex items-center justify-center gap-2 bg-white/90 dark:bg-black/90 hover:bg-white dark:hover:bg-black text-gray-800 dark:text-gray-200 shadow-lg rounded-xl h-14 w-14 p-0 transition-all hover:shadow-xl hover:scale-110 backdrop-blur-sm md:h-14 md:w-14 sm:h-12 sm:w-12 duration-300 ease-in-out border border-white/30 dark:border-black/30"
-              aria-label="My Location"
-            >
-              <Locate className={`w-6 h-6 ${props.isLocating ? 'animate-spin' : ''} md:w-6 md:h-6 sm:w-5 sm:h-5`} />
-            </button>
-            
+        {/* Google Maps Style Right Controls */}
+        <div className="leaflet-top leaflet-right mt-24">
+          <div className="leaflet-control flex flex-col gap-3 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
             {/* Zoom Controls */}
-            <div className="flex flex-col bg-white/90 dark:bg-black/90 rounded-xl shadow-lg overflow-hidden backdrop-blur-sm border border-white/30 dark:border-black/30">
+            <div className="flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
               <button 
                 type="button" 
                 onClick={handleZoomIn}
-                className="flex items-center justify-center h-12 w-14 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-110 md:h-12 md:w-14 sm:h-10 sm:w-12"
+                className="flex items-center justify-center h-10 w-10 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
                 aria-label="Zoom in"
               >
-                <ZoomIn className="w-5 h-5 md:w-5 md:h-5 sm:w-4 sm:h-4" />
+                <ZoomIn className="w-5 h-5" />
               </button>
               <div className="border-t border-gray-200 dark:border-gray-700" />
               <button 
                 type="button" 
                 onClick={handleZoomOut}
-                className="flex items-center justify-center h-12 w-14 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-110 md:h-12 md:w-14 sm:h-10 sm:w-12"
-                aria-label="Zoom out"
-              >
-                <ZoomOut className="w-5 h-5 md:w-5 md:h-5 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-            
-            {/* Layer Selector */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="bg-white/90 dark:bg-black/90 rounded-xl shadow-lg backdrop-blur-sm border border-white/30 dark:border-black/30">
-                    <Select value={props.mapLayer} onValueChange={(value: MapLayer) => props.setMapLayer(value)}>
-                      <SelectTrigger className="h-14 w-14 p-0 border-0 bg-transparent md:h-14 md:w-14 sm:h-12 sm:w-12 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200">
-                        {props.mapLayer === 'street' && <MapIcon className="w-6 h-6 mx-auto md:w-6 md:h-6 sm:w-5 sm:h-5" />}
-                        {props.mapLayer === 'satellite' && <Satellite className="w-6 h-6 mx-auto md:w-6 md:h-6 sm:w-5 sm:h-5" />}
-                        {props.mapLayer === 'terrain' && <Layers className="w-6 h-6 mx-auto md:w-6 md:h-6 sm:w-5 sm:h-5" />}
-                      </SelectTrigger>
-                      <SelectContent className="glass rounded-xl backdrop-blur-md border border-white/20 dark:border-black/20">
-                        <SelectItem value="street">
-                          <div className="flex items-center gap-2">
-                            <MapIcon className="w-4 h-4" />
-                            Street Map
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="satellite">
-                          <div className="flex items-center gap-2">
-                            <Satellite className="w-4 h-4" />
-                            Satellite
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="terrain">
-                          <div className="flex items-center gap-2">
-                            <Layers className="w-4 h-4" />
-                            Terrain
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="glass rounded-lg backdrop-blur-md border border-white/20 dark:border-black/20">
-                  <p>Map Layers</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            
-            {/* Filter Button */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="bg-white/90 dark:bg-black/90 rounded-xl shadow-lg backdrop-blur-sm border border-white/30 dark:border-black/30">
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      className="h-14 w-14 p-0 hover:bg-gray-100 dark:hover:bg-gray-800 md:h-14 md:w-14 sm:h-12 sm:w-12 transition-colors duration-200"
-                      onClick={() => props.toggleEntityFilter("person")}
-                    >
-                      <Filter className="w-6 h-6 md:w-6 md:h-6 sm:w-5 sm:h-5" />
-                    </Button>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="glass rounded-lg backdrop-blur-md border border-white/20 dark:border-black/20">
-                  <p>Filter Entities</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </div>
-        
-        {/* Mobile Controls - Horizontal Toolbar */}
-        <div className="leaflet-bottom leaflet-center mb-4 md:hidden">
-          <div className="leaflet-control flex gap-2 p-2 bg-white/30 dark:bg-black/30 glass rounded-2xl shadow-xl backdrop-blur-md border border-white/20 dark:border-black/20">
-            {/* Location Button */}
-            <button 
-              type="button" 
-              onClick={props.getCurrentLocation}
-              disabled={props.isLocating}
-              className="flex items-center justify-center gap-2 bg-white/90 dark:bg-black/90 hover:bg-white dark:hover:bg-black text-gray-800 dark:text-gray-200 shadow-lg rounded-xl h-12 w-12 p-0 transition-all hover:shadow-xl hover:scale-110 backdrop-blur-sm duration-300 ease-in-out border border-white/30 dark:border-black/30"
-              aria-label="My Location"
-            >
-              <Locate className={`w-5 h-5 ${props.isLocating ? 'animate-spin' : ''}`} />
-            </button>
-            
-            {/* Zoom Controls */}
-            <div className="flex bg-white/90 dark:bg-black/90 rounded-xl shadow-lg overflow-hidden backdrop-blur-sm border border-white/30 dark:border-black/30">
-              <button 
-                type="button" 
-                onClick={handleZoomIn}
-                className="flex items-center justify-center h-12 w-12 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-110"
-                aria-label="Zoom in"
-              >
-                <ZoomIn className="w-5 h-5" />
-              </button>
-              <div className="border-l border-gray-200 dark:border-gray-700" />
-              <button 
-                type="button" 
-                onClick={handleZoomOut}
-                className="flex items-center justify-center h-12 w-12 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-110"
+                className="flex items-center justify-center h-10 w-10 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
                 aria-label="Zoom out"
               >
                 <ZoomOut className="w-5 h-5" />
               </button>
             </div>
             
-            {/* Layer Selector */}
+            {/* Location Button */}
+            <button 
+              type="button" 
+              onClick={props.getCurrentLocation}
+              disabled={props.isLocating}
+              className="flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg h-10 w-10 p-0 transition-colors duration-200 shadow"
+              aria-label="My Location"
+            >
+              <Locate className={`w-5 h-5 ${props.isLocating ? 'animate-spin' : ''}`} />
+            </button>
+            
+            {/* Map Layers Button */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="bg-white/90 dark:bg-black/90 rounded-xl shadow-lg backdrop-blur-sm border border-white/30 dark:border-black/30">
-                    <Select value={props.mapLayer} onValueChange={(value: MapLayer) => props.setMapLayer(value)}>
-                      <SelectTrigger className="h-12 w-12 p-0 border-0 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200">
-                        {props.mapLayer === 'street' && <MapIcon className="w-5 h-5 mx-auto" />}
-                        {props.mapLayer === 'satellite' && <Satellite className="w-5 h-5 mx-auto" />}
-                        {props.mapLayer === 'terrain' && <Layers className="w-5 h-5 mx-auto" />}
-                      </SelectTrigger>
-                      <SelectContent className="glass rounded-xl backdrop-blur-md border border-white/20 dark:border-black/20">
-                        <SelectItem value="street">
-                          <div className="flex items-center gap-2">
-                            <MapIcon className="w-4 h-4" />
-                            Street Map
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="satellite">
-                          <div className="flex items-center gap-2">
-                            <Satellite className="w-4 h-4" />
-                            Satellite
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="terrain">
-                          <div className="flex items-center gap-2">
-                            <Layers className="w-4 h-4" />
-                            Terrain
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      const layers: MapLayer[] = ['street', 'satellite', 'terrain', 'night', 'hybrid'];
+                      const currentIndex = layers.indexOf(props.mapLayer);
+                      const nextIndex = (currentIndex + 1) % layers.length;
+                      props.setMapLayer(layers[nextIndex]);
+                    }}
+                    className="flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg h-10 w-10 p-0 transition-colors duration-200 shadow"
+                    aria-label="Map Layers"
+                  >
+                    {props.mapLayer === 'street' && <MapIcon className="w-5 h-5" />}
+                    {props.mapLayer === 'satellite' && <Satellite className="w-5 h-5" />}
+                    {props.mapLayer === 'terrain' && <Layers className="w-5 h-5" />}
+                    {props.mapLayer === 'night' && <Moon className="w-5 h-5" />}
+                    {props.mapLayer === 'hybrid' && <MapIcon className="w-5 h-5" />}
+                  </button>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="glass rounded-lg backdrop-blur-md border border-white/20 dark:border-black/20">
-                  <p>Map Layers</p>
+                <TooltipContent side="left" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2">
+                  <p>Map Layers: {props.mapLayer.charAt(0).toUpperCase() + props.mapLayer.slice(1)}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            
+            {/* Traffic Toggle */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button 
+                    type="button" 
+                    onClick={() => props.setShowTraffic(!props.showTraffic)}
+                    className={`flex items-center justify-center rounded-lg h-10 w-10 p-0 transition-colors duration-200 shadow ${props.showTraffic ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                    aria-label="Traffic"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2">
+                  <p>Traffic</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            {/* Weather Toggle */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button 
+                    type="button" 
+                    onClick={() => props.setShowWeather(!props.showWeather)}
+                    className={`flex items-center justify-center rounded-lg h-10 w-10 p-0 transition-colors duration-200 shadow ${props.showWeather ? 'bg-blue-500 text-white' : 'bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                    aria-label="Weather"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                    </svg>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2">
+                  <p>Weather</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+        
+        {/* Mobile Controls - Google Maps Style */}
+        <div className="leaflet-bottom leaflet-center mb-4 md:hidden">
+          <div className="leaflet-control flex gap-3 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+            {/* Location Button */}
+            <button 
+              type="button" 
+              onClick={props.getCurrentLocation}
+              disabled={props.isLocating}
+              className="flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg h-12 w-12 p-0 transition-colors duration-200 shadow"
+              aria-label="My Location"
+            >
+              <Locate className={`w-6 h-6 ${props.isLocating ? 'animate-spin' : ''}`} />
+            </button>
+            
+            {/* Zoom Controls */}
+            <div className="flex bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+              <button 
+                type="button" 
+                onClick={handleZoomIn}
+                className="flex items-center justify-center h-12 w-12 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+                aria-label="Zoom in"
+              >
+                <ZoomIn className="w-6 h-6" />
+              </button>
+              <div className="border-l border-gray-200 dark:border-gray-700" />
+              <button 
+                type="button" 
+                onClick={handleZoomOut}
+                className="flex items-center justify-center h-12 w-12 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+                aria-label="Zoom out"
+              >
+                <ZoomOut className="w-6 h-6" />
+              </button>
+            </div>
+            
+            {/* Map Layers Button */}
+            <button 
+              type="button" 
+              onClick={() => {
+                const layers: MapLayer[] = ['street', 'satellite', 'terrain', 'night', 'hybrid'];
+                const currentIndex = layers.indexOf(props.mapLayer);
+                const nextIndex = (currentIndex + 1) % layers.length;
+                props.setMapLayer(layers[nextIndex]);
+              }}
+              className="flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg h-12 w-12 p-0 transition-colors duration-200 shadow"
+              aria-label="Map Layers"
+            >
+              {props.mapLayer === 'street' && <MapIcon className="w-6 h-6" />}
+              {props.mapLayer === 'satellite' && <Satellite className="w-6 h-6" />}
+              {props.mapLayer === 'terrain' && <Layers className="w-6 h-6" />}
+              {props.mapLayer === 'night' && <Moon className="w-6 h-6" />}
+              {props.mapLayer === 'hybrid' && <MapIcon className="w-6 h-6" />}
+            </button>
           </div>
         </div>
         
@@ -1079,14 +1574,406 @@ const MapComponent = (props: {
           </div>
         )}
         
-        {/* Map Info Footer - Combined Zoom and Scale */}
+        {/* Google Maps Style Bottom Controls */}
+        <div className="leaflet-bottom leaflet-left mb-4 ml-4">
+          <div className="leaflet-control bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2 text-sm font-medium flex gap-4 items-center">
+            {/* Scale Bar */}
+            <div className="flex items-center gap-1">
+              <div className="h-1 bg-black dark:bg-white w-8"></div>
+              <span className="text-gray-700 dark:text-gray-300">100 m</span>
+            </div>
+            
+            {/* Map Attribution */}
+            <div className="text-gray-700 dark:text-gray-300">
+              Leaflet | OpenStreetMap contributors
+            </div>
+          </div>
+        </div>
+        
+        {/* Zoom Level Indicator */}
         <div className="leaflet-bottom leaflet-right mb-4 mr-4">
-          <div className="leaflet-control bg-white/80 dark:bg-black/80 backdrop-blur-sm rounded-xl shadow-lg px-3 py-2 text-sm font-medium border border-white/20 dark:border-black/20 flex gap-4">
-            <span>Zoom: {props.zoomLevel}</span>
-            <span>Scale: 1:{Math.round(156543.03 * Math.cos(props.mapCenter[0] * Math.PI / 180) / Math.pow(2, props.zoomLevel))}</span>
+          <div className="leaflet-control bg-white dark:bg-gray-800 rounded-lg shadow-lg px-3 py-2 text-sm font-medium">
+            Zoom: {props.zoomLevel}
+          </div>
+        </div>
+        
+        {/* Google Maps Style Sidebar */}
+        <div className={`leaflet-top leaflet-left h-full ${props.isSidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-300 ease-in-out`}>
+          <div className="leaflet-control h-full bg-white dark:bg-gray-800 rounded-r-lg shadow-lg flex flex-col">
+            {/* Sidebar Header */}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              {props.isSidebarCollapsed ? (
+                <button 
+                  onClick={() => props.setIsSidebarCollapsed(false)}
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                  aria-label="Expand sidebar"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+              ) : (
+                <>
+                  <h2 className="text-lg font-semibold">Directions</h2>
+                  <button 
+                    onClick={() => props.setIsSidebarCollapsed(true)}
+                    className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                    aria-label="Collapse sidebar"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </>
+              )}
+            </div>
+            
+            {!props.isSidebarCollapsed && (
+              <div className="flex-1 overflow-y-auto p-4">
+                <form onSubmit={props.handleGetDirections} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">From</label>
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        value={props.fromLocation}
+                        onChange={(e) => props.setFromLocation(e.target.value)}
+                        placeholder="Choose starting point"
+                        className="w-full pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (props.markerPosition) {
+                            props.setFromLocation(`${props.markerPosition[0]}, ${props.markerPosition[1]}`);
+                          }
+                        }}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        title="Use current location"
+                      >
+                        <Locate className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-1">To</label>
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        value={props.toLocation}
+                        onChange={(e) => props.setToLocation(e.target.value)}
+                        placeholder="Choose destination"
+                        className="w-full pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (props.markerPosition) {
+                            props.setToLocation(`${props.markerPosition[0]}, ${props.markerPosition[1]}`);
+                          }
+                        }}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        title="Use current location"
+                      >
+                        <Locate className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Mode of Transport</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {(['car', 'walk', 'bike', 'train', 'bus'] as TransportMode[]).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => props.setTransportMode(mode)}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+                            props.transportMode === mode
+                              ? 'bg-blue-500 text-white shadow-lg'
+                              : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                          }`}
+                        >
+                          {mode === 'car' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a1 1 0 0 0-.8-.4H5.24a2 2 0 0 0-1.8 1.1l-.8 1.63A6 6 0 0 0 2 12.42V16h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg>}
+                          {mode === 'walk' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 7H7a2 2 0 0 0-2 2v4h4"/><path d="M11 11h2m0 0v4m0-4h4m-8 6h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2Z"/><path d="M11 15v4"/><path d="M18 15v4"/><path d="M3 15v4"/></svg>}
+                          {mode === 'bike' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M15 17H7"/><path d="M7 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M7 17V7H5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2l2 7"/><path d="M13 17v-5h4a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"/><circle cx="17" cy="17" r="1"/><circle cx="9" cy="17" r="1"/></svg>}
+                          {mode === 'train' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"/><path d="m9 15 1 1"/><path d="m14 15-1 1"/><path d="M18 12h.01"/><path d="M18 16h.01"/><path d="M2 12h.01"/><path d="M2 16h.01"/><path d="M6 12h.01"/><path d="M6 16h.01"/><path d="M22 12v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4"/><path d="M15 17v3a1 1 0 0 1-1 1H6l-4-4V7a2 2 0 0 1 2-2h6l4 4V17a1 1 0 0 1-1 1Z"/></svg>}
+                          {mode === 'bus' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 5h6a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="M8 5h6a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="M16 11h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2"/><path d="M8 11H6a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2"/><path d="M12 19v-4"/><path d="M2 19v-4"/><path d="M22 19v-4"/><circle cx="12" cy="17" r="1"/><circle cx="2" cy="17" r="1"/><circle cx="22" cy="17" r="1"/></svg>}
+                          <span className="capitalize text-sm font-medium">{mode}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      type="submit" 
+                      disabled={props.isGettingDirections}
+                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
+                    >
+                      {props.isGettingDirections ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                          Getting Directions...
+                        </>
+                      ) : (
+                        "Get Directions"
+                      )}
+                    </Button>
+                    <Button 
+                      type="button" 
+                      onClick={() => {
+                        const temp = props.fromLocation;
+                        props.setFromLocation(props.toLocation);
+                        props.setToLocation(temp);
+                      }}
+                      className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
+                      aria-label="Reverse directions"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                        <polyline points="17 1 21 5 17 9"></polyline>
+                        <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                        <polyline points="7 23 3 19 7 15"></polyline>
+                        <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                      </svg>
+                    </Button>
+                  </div>
+                </form>
+                
+                {/* Favorites Section */}
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="font-medium">Favorite Places</span>
+                    <button 
+                      onClick={() => {
+                        if (props.markerPosition) {
+                          props.toggleFavorite(`${props.markerPosition[0]}, ${props.markerPosition[1]}`);
+                        }
+                      }}
+                      className="text-sm text-blue-500 hover:text-blue-700 dark:hover:text-blue-300"
+                    >
+                      + Add Current
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
+                    {props.favorites.map((fav, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                        <span className="text-sm truncate">{fav}</span>
+                        <button 
+                          onClick={() => props.toggleFavorite(fav)}
+                          className="text-gray-500 hover:text-red-500"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {props.favorites.length === 0 && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+                        No favorite places yet
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                {props.routeData && (
+                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="font-medium">Route Summary</span>
+                      <span className="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
+                        {props.routeData.distance} km • {props.routeData.duration} min
+                      </span>
+                    </div>
+                    <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
+                      {props.routeData.steps.map((step, index) => (
+                        <div key={index} className="flex items-start gap-3 text-sm">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center mt-0.5">
+                            {index + 1}
+                          </span>
+                          <span>{step.instruction}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Navigation Controls */}
+                {props.routeData && (
+                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="font-medium">Navigation</span>
+                      {props.isNavigating ? (
+                        <Button 
+                          onClick={props.stopNavigation}
+                          className="bg-red-500 hover:bg-red-600 text-white"
+                        >
+                          Stop Navigation
+                        </Button>
+                      ) : (
+                        <Button 
+                          onClick={props.startNavigation}
+                          className="bg-green-500 hover:bg-green-600 text-white"
+                        >
+                          Start Navigation
+                        </Button>
+                      )}
+                    </div>
+                    
+                    {props.isNavigating && (
+                      <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 mb-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium">Next Turn</span>
+                          <span className="text-sm">ETA: {props.eta}</span>
+                        </div>
+                        <div className="text-lg font-semibold mb-2">{props.nextTurn}</div>
+                        <div className="text-sm">In {props.distanceToNextTurn.toFixed(1)} km</div>
+                      </div>
+                    )}
+                    
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                      <p>Follow the route step by step with turn-by-turn navigation.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </>
+    );
+  };
+
+  
+  // Add custom markers to the map
+  const CustomMarkers = () => {
+    if (!Marker) return null;
+    
+    return (
+      <>
+        {props.customMarkers.map((marker) => (
+          <Marker 
+            key={marker.id}
+            position={marker.position}
+            icon={new L.Icon({
+              iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png',
+              shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+              iconSize: [25, 41],
+              iconAnchor: [12, 41],
+              popupAnchor: [1, -34],
+              shadowSize: [41, 41]
+            })}
+          >
+            <Popup>
+              <div className="font-semibold">Custom Marker</div>
+              <div className="text-sm">
+                {marker.position[0].toFixed(6)}, {marker.position[1].toFixed(6)}
+              </div>
+              <button
+                onClick={() => {
+                  // Remove this marker
+                  props.setCustomMarkers(
+                    props.customMarkers.filter(m => m.id !== marker.id)
+                  );
+                }}
+                className="mt-2 text-xs text-red-500 hover:text-red-700"
+              >
+                Remove Marker
+              </button>
+            </Popup>
+          </Marker>
+        ))}
+      </>
+    );
+  };
+  
+  // Add context menu component
+  const ContextMenu = () => {
+    if (!props.contextMenu.visible) return null;
+    
+    return (
+      <div 
+        className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50 py-2 min-w-48"
+        style={{ 
+          left: props.contextMenu.x, 
+          top: props.contextMenu.y,
+          transform: 'translate(-50%, -100%)'
+        }}
+      >
+        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+          <div className="text-sm font-medium">
+            {props.contextMenu.lat.toFixed(6)}, {props.contextMenu.lng.toFixed(6)}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 flex items-center gap-2"
+          onClick={() => {
+            // Add marker at this location
+            props.setMarkerPosition([props.contextMenu.lat, props.contextMenu.lng]);
+            props.setContextMenu({ ...props.contextMenu, visible: false });
+          }}
+        >
+          <MapPin className="w-4 h-4" />
+          Add Marker
+        </button>
+        <button
+          type="button"
+          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 flex items-center gap-2"
+          onClick={() => {
+            // Start directions from this location
+            props.setFromLocation(`${props.contextMenu.lat}, ${props.contextMenu.lng}`);
+            props.setIsDirectionsOpen(true);
+            props.setIsSidebarCollapsed(false);
+            props.setContextMenu({ ...props.contextMenu, visible: false });
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          Start Directions from Here
+        </button>
+        <button
+          type="button"
+          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 flex items-center gap-2"
+          onClick={() => {
+            // Measure distance from last point
+            if (props.routePoints.length > 0) {
+              const lastPoint = props.routePoints[props.routePoints.length - 1];
+              // In a real implementation, you would calculate the actual distance
+              alert(`Distance from last point: ~${Math.sqrt(
+                Math.pow(props.contextMenu.lat - lastPoint.position[0], 2) + 
+                Math.pow(props.contextMenu.lng - lastPoint.position[1], 2)
+              ).toFixed(2)} degrees`);
+            } else {
+              alert('No previous point to measure from');
+            }
+            props.setContextMenu({ ...props.contextMenu, visible: false });
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Measure Distance
+        </button>
+        <button
+          type="button"
+          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 flex items-center gap-2"
+          onClick={() => {
+            // Save location to favorites
+            const location = `${props.contextMenu.lat}, ${props.contextMenu.lng}`;
+            props.setFavorites([...props.favorites, location]);
+            props.setContextMenu({ ...props.contextMenu, visible: false });
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+          </svg>
+          Save Location
+        </button>
+      </div>
     );
   };
 
@@ -1226,6 +2113,10 @@ const MapComponent = (props: {
           return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
         case 'terrain':
           return 'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png';
+        case 'night':
+          return 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png';
+        case 'hybrid':
+          return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
         case 'street':
         default:
           return 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png';
@@ -1238,6 +2129,10 @@ const MapComponent = (props: {
         return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
       case 'terrain':
         return 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+      case 'night':
+        return 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png';
+      case 'hybrid':
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
       case 'street':
       default:
         return 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -1252,6 +2147,10 @@ const MapComponent = (props: {
           return 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
         case 'terrain':
           return '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors';
+        case 'night':
+          return '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors';
+        case 'hybrid':
+          return 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
         case 'street':
         default:
           return '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors';
@@ -1263,6 +2162,10 @@ const MapComponent = (props: {
         return 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
       case 'terrain':
         return 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)';
+      case 'night':
+        return '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors';
+      case 'hybrid':
+        return 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
       case 'street':
       default:
         return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
@@ -1440,7 +2343,165 @@ const MapComponent = (props: {
             )}
           </SheetContent>
         </Sheet>
+        
+        {/* Add context menu */}
+        <ContextMenu />
+        
+        {/* Add draggable route points */}
+        {Marker && props.routePoints.map((point) => (
+          <Marker 
+            key={point.id}
+            position={point.position}
+            draggable={true}
+            eventHandlers={{
+              dragend: (e: any) => {
+                // Update route point position when dragged
+                const newPosition: [number, number] = [e.target._latlng.lat, e.target._latlng.lng];
+                props.setRoutePoints(
+                  props.routePoints.map(p => 
+                    p.id === point.id 
+                      ? { ...p, position: newPosition } 
+                      : p
+                  )
+                );
+                
+                // Recalculate route if we have at least 2 points
+                if (props.routePoints.length >= 2) {
+                  // In a real implementation, you would call the routing API here
+                  console.log('Route recalculated after dragging point');
+                }
+              }
+            }}
+            icon={new L.Icon({
+              iconUrl: point.type === 'start' 
+                ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png'
+                : point.type === 'end'
+                ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png'
+                : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+              shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+              iconSize: [25, 41],
+              iconAnchor: [12, 41],
+              popupAnchor: [1, -34],
+              shadowSize: [41, 41]
+            })}
+          >
+            <Popup>
+              <div className="font-semibold">
+                {point.type === 'start' ? 'Start' : point.type === 'end' ? 'End' : 'Waypoint'}
+              </div>
+              <div className="text-sm">
+                {point.position[0].toFixed(6)}, {point.position[1].toFixed(6)}
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+        
+        
+        {/* Add custom markers */}
+        <CustomMarkers />
       </MapContainer>
     </div>
   );
+
+  return (
+    <div className="w-full h-full flex relative overflow-hidden">
+      {/* Google Maps Style Layout */}
+      <div className="flex-1 flex flex-col h-full relative">
+        <MapComponent 
+          isLocating={props.isLocating} 
+          setIsLocating={props.setIsLocating} 
+          mapRef={props.mapRef} 
+          getCurrentLocation={props.getCurrentLocation}
+          error={props.error}
+          setError={props.setError}
+          markerPosition={props.markerPosition}
+          mapCenter={props.mapCenter}
+          searchQuery={props.searchQuery}
+          setSearchQuery={props.  setSearchQuery}
+          searchHistory={props.searchHistory}
+          setSearchHistory={props.setSearchHistory}
+          autocompleteResults={props.autocompleteResults}
+          setAutocompleteResults={props.setAutocompleteResults}
+          showAutocomplete={props.showAutocomplete}
+          setShowAutocomplete={props.setShowAutocomplete}
+          handleSearchQueryChange={props.handleSearchQueryChange}
+          handleSearch={props.handleSearch}
+          selectedEntity={props.selectedEntity}
+          setSelectedEntity={props.setSelectedEntity}
+          isEntitySheetOpen={props.isEntitySheetOpen}
+          setIsEntitySheetOpen={props.setIsEntitySheetOpen}
+          mapLayer={props.mapLayer}
+          setMapLayer={props.setMapLayer}
+          zoomLevel={props.zoomLevel}
+          setZoomLevel={props.setZoomLevel}
+          filteredEntities={props.filteredEntities}
+          toggleEntityFilter={props.toggleEntityFilter}
+          isDarkMode={props.isDarkMode}
+          setIsDarkMode={props.setIsDarkMode}
+          // Directions props
+          fromLocation={props.fromLocation}
+          setFromLocation={props.setFromLocation}
+          toLocation={props.toLocation}
+          setToLocation={props.setToLocation}
+          transportMode={props.transportMode}
+          setTransportMode={props.setTransportMode}
+          routeData={props.routeData}
+          setRouteData={props.setRouteData}
+          isDirectionsOpen={props.isDirectionsOpen}
+          setIsDirectionsOpen={props.setIsDirectionsOpen}
+          isGettingDirections={props.isGettingDirections}
+          setIsGettingDirections={props.setIsGettingDirections}
+          handleGetDirections={props.handleSearch}
+          // Google Maps features
+          showTraffic={props.showTraffic}
+          setShowTraffic={props.setShowTraffic}
+          showTransit={props.showTransit}
+          setShowTransit={props.setShowTransit}
+          showWeather={props.showWeather}
+          setShowWeather={props.setShowWeather}
+          favorites={props.favorites}
+          setFavorites={props.setFavorites}
+          isSidebarCollapsed={props.isSidebarCollapsed}
+          setIsSidebarCollapsed={props.setIsSidebarCollapsed}
+          toggleFavorite={(location: string) => {
+            props.setFavorites((prev: string[]) => {
+              prev.includes(location) 
+                ? prev.filter(fav => fav !== location) 
+                : [...prev, location]
+            });
+          }}
+          // Navigation features
+          isNavigating={props.isNavigating}
+          setIsNavigating={props.setIsNavigating}
+          currentStep={props.currentStep}
+          setCurrentStep={props.setCurrentStep}
+          userPosition={props.userPosition}
+          setUserPosition={props.setUserPosition}
+          nextTurn={props.nextTurn}
+          setNextTurn={props.setNextTurn}
+          distanceToNextTurn={props.distanceToNextTurn}
+          setDistanceToNextTurn={props.setDistanceToNextTurn}
+          eta={props.eta}
+          setEta={props.setEta}
+          startNavigation={() => props.setIsNavigating(true)}
+          stopNavigation={() => props.setIsNavigating(false)}
+          // Smart interactions
+          contextMenu={props.contextMenu}
+          setContextMenu={props.setContextMenu}
+          routePoints={props.routePoints}
+          setRoutePoints={props.setRoutePoints}
+          setMarkerPosition={props.setMarkerPosition}
+          // User personalization
+          customMarkers={props.customMarkers}
+          setCustomMarkers={props.setCustomMarkers}
+          weatherData={weatherData}
+          isWeatherLoading={isWeatherLoading}
+          fetchWeatherData={fetchWeatherData}
+        />
+      </div>
+    </div>
+  );
 };
+
+
+export default MapManagement;

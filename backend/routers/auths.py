@@ -67,6 +67,13 @@ router = APIRouter()
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
+
+# Check if there are existing users
+@router.get("/has-users")
+async def has_users():
+    return {"has_users": Users.has_users()}
+
+
 ############################
 # GetSessionUser
 ############################
@@ -678,7 +685,8 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
 
 @router.post("/extended-signup", response_model=SessionUserResponse)
 async def extend_signup(request: Request, response: Response, form_data: ExtendSignupForm):
-    signup_data = await signup(request, response, form_data)
+    # First, perform the standard signup
+    signup_response = await signup(request, response, form_data)
     
     # If location data is provided, store it as a state
     if form_data.location and any([
@@ -691,14 +699,14 @@ async def extend_signup(request: Request, response: Response, form_data: ExtendS
             from backend.models.home_assistant_controllers import StatesCtrl
             
             # Create entity ID based on user ID
-            entity_id = f"person.{signup_data['name']}"
+            entity_id = f"person.{signup_response['name'].replace(' ', '_')}"
             
             # Prepare state attributes with location data
             attributes = {
                 "latitude": form_data.location.get("latitude"),
                 "longitude": form_data.location.get("longitude"),
                 "address": form_data.location.get("address"),
-                "user_id": signup_data["id"],
+                "user_id": signup_response["id"],
                 "timestamp": int(time.time())
             }
             
@@ -710,11 +718,11 @@ async def extend_signup(request: Request, response: Response, form_data: ExtendS
             )
             
             if not location_state:
-                log.error(f"Failed to create location state for user {signup_data['id']}")
+                log.error(f"Failed to create location state for user {signup_response['id']}")
         except Exception as e:
-            log.error(f"Error storing location data for user {signup_data['id']}: {str(e)}")
+            log.error(f"Error storing location data for user {signup_response['id']}: {str(e)}")
     
-    return signup_data
+    return signup_response
 
 
 @router.get("/signout")

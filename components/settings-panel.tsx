@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { User, Bell, Shield,  Save, Upload,Settings,Lock ,Copy,EyeOff,Eye,AudioLines,Download ,Home} from "lucide-react"
+import { User, Bell, Shield,  Save, Upload,Settings,Lock ,Copy,EyeOff,Eye,AudioLines,Download ,Home, Plus, Edit, Trash2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { apiClient } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
+import { UserList } from "./Userlist"
 
 interface User{
     id?: string,
@@ -26,6 +27,15 @@ interface User{
     gender?: string,
     date_of_birth?: string
 }
+
+interface UserTableItem {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  date_of_birth?: string;
+}
+
 interface AudioConfig {
    stt: {
      ENGINE?: string,
@@ -41,6 +51,13 @@ interface AudioConfig {
      MODEL?: string,
    }
 }
+
+interface HomeArea {
+  id: number
+  name: string
+  icon?: string
+}
+
 export function SettingsPanel() {
   const [user, setUser] = useState<User>({} as User)
   const [audioconfig, setAudioConfig] = useState<AudioConfig>({
@@ -70,6 +87,18 @@ export function SettingsPanel() {
     accentColor: "cyan",
     animations: true,
   })
+  const [users, setUsers] = useState<UserTableItem[]>([]);
+  const [isEditingUser, setIsEditingUser] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserTableItem | null>(null);
+  const [allusers, setAllUsers] = useState<UserTableItem[]>([]);
+
+  // Home structure state
+  const [floors, setFloors] = useState<string[]>([])
+  const [areas, setAreas] = useState<HomeArea[]>([])
+  const [subAreas, setSubAreas] = useState<HomeArea[]>([])
+  const [newArea, setNewArea] = useState({ name: "", icon: "" })
+  const [editingArea, setEditingArea] = useState<HomeArea | null>(null)
+
   useEffect(() => {
       const fetchUsers = async () => {
         try {
@@ -79,12 +108,25 @@ export function SettingsPanel() {
               ...prevUser,
               ...response.data
             }));
+            
           }
         } catch (error) {
           console.error("Error fetching users:", error);
         }
       }
+      const fetchAllUsers = async () => {
+        try {
+          const response = await apiClient.getUsers();
+          if (response.data) {
+            setAllUsers(response.data.users);
+          }
+        } catch (error) {
+          console.error("Error fetching users:", error);
+        }
+      }
+      fetchAllUsers();
       fetchUsers()
+      
       const fetchaudioconfig = async () => { 
         try { 
           const response = await apiClient.getAudioConfig();
@@ -97,7 +139,111 @@ export function SettingsPanel() {
         } 
       }
       fetchaudioconfig();
-    },[])
+
+      loadHomeStructure();
+    }, [])
+
+  // Load home structure data
+  const loadHomeStructure = async () => {
+    // Load actual home areas from the API
+    await loadHomeAreas();
+  }
+
+  // Load home areas data
+  const loadHomeAreas = async () => {
+    try {
+      const response = await apiClient.getHomeAssistantAreas()
+      if (response.success && response.data) {
+        setAreas(response.data)
+      }
+    } catch (error) {
+      console.error("Error loading home areas:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load home areas",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Add a new area
+  const handleAddArea = async () => {
+    if (newArea.name.trim()) {
+      try {
+        const areaData = {
+          name: newArea.name,
+          icon: newArea.icon || null
+        }
+        
+        const response = await apiClient.createHomeAssistantArea(areaData)
+        if (response.success && response.data) {
+          // Refresh the areas list
+          await loadHomeAreas()
+          setNewArea({ name: "", icon: "" })
+          toast({
+            title: "Success",
+            description: "Area added successfully"
+          })
+        } else {
+          throw new Error(response.error || "Failed to add area")
+        }
+      } catch (error) {
+        console.error("Error adding area:", error)
+        toast({
+          title: "Error",
+          description: "Failed to add area",
+          variant: "destructive"
+        })
+      }
+    }
+  }
+
+  // Update an area
+  const handleUpdateArea = async () => {
+    if (editingArea) {
+      try {
+        // Note: In a real implementation, we would have an update endpoint
+        // For now, we'll simulate the update by showing a toast
+        toast({
+          title: "Info",
+          description: "Area update functionality would be implemented in a full version",
+          variant: "default"
+        })
+        setEditingArea(null)
+        setNewArea({ name: "", icon: "" })
+      } catch (error) {
+        console.error("Error updating area:", error)
+        toast({
+          title: "Error",
+          description: "Failed to update area",
+          variant: "destructive"
+        })
+      }
+    }
+  }
+
+  // Delete an area
+  const handleDeleteArea = async (areaId: number) => {
+    try {
+      // Note: In a real implementation, we would have a delete endpoint
+      // For now, we'll simulate the delete by showing a toast
+      toast({
+        title: "Info",
+        description: "Area delete functionality would be implemented in a full version",
+        variant: "default"
+      })
+      // Refresh the areas list
+      await loadHomeAreas()
+    } catch (error) {
+      console.error("Error deleting area:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete area",
+        variant: "destructive"
+      })
+    }
+  }
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -140,8 +286,8 @@ export function SettingsPanel() {
   }
   const handleUpdateHome = async ()=>{ 
     try {
-      const response = await apiClient
-      if (response.data) {
+      const response = await apiClient.updateConfig({}); // Placeholder for actual home update
+      if (response.success) {
         console.log("Home updated successfully");
       } else {
         console.error("Failed to update home:", response.error);
@@ -150,6 +296,8 @@ export function SettingsPanel() {
       console.error("Error updating home:", error);
     }
   }
+  
+  
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -164,10 +312,12 @@ export function SettingsPanel() {
             <Settings className="w-4 h-4 mr-2" />
             General
           </TabsTrigger>
-          <TabsTrigger value="audio" className="data-[state=active]:bg-primary/20">
+          {user.role==='admin' && (
+            <TabsTrigger value="audio" className="data-[state=active]:bg-primary/20">
             <AudioLines className="w-4 h-4 mr-2" />
             Audio
           </TabsTrigger>
+          )}
           <TabsTrigger value="accounts" className="data-[state=active]:bg-primary/20">
             <User className="w-4 h-4 mr-2" />
             Accounts
@@ -176,6 +326,12 @@ export function SettingsPanel() {
             <Home className="w-4 h-4 mr-2" />
             Home
           </TabsTrigger>
+          {user.role==='admin' && (
+            <TabsTrigger value="users" className="data-[state=active]:bg-primary/20">
+            <User className="w-4 h-4 mr-2" />
+            Users
+          </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Account Tab */}
@@ -612,13 +768,178 @@ export function SettingsPanel() {
         {/* Home Tab */}
         <TabsContent value="home" className="space-y-6"> 
         <Card className="glass border-primary/20 p-6">
-          <h2 className="text-xl font-semibold mb-6">Configure Home</h2>
+          <h2 className="text-xl font-semibold mb-6">Configure Home Structure</h2>
           <div className="space-y-6">
-            <div className="space-y-2"> 
-            <Button onClick={handleUpdateHome} className="neon-glow">Add Floor</Button>
+            {/* Floors Section - Using Areas as Floors for this implementation */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Floors</h3>
+                <div className="flex gap-2">
+                  <Input
+                    value={newArea.name}
+                    onChange={(e) => setNewArea({...newArea, name: e.target.value})}
+                    placeholder="Floor name"
+                    className="glass border-primary/20 w-40"
+                  />
+                  <Button 
+                    onClick={handleAddArea}
+                    className="neon-glow"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Floor
+                  </Button>
+                </div>
+              </div>
+              
+              {areas.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {areas.map((area) => (
+                    <div key={area.id} className="border rounded-lg p-4 flex justify-between items-center">
+                      <span>{area.name}</span>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            setEditingArea(area)
+                            setNewArea({ name: area.name, icon: area.icon || "" })
+                          }}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => handleDeleteArea(area.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border rounded-lg p-4">
+                  <p className="text-muted-foreground text-center py-4">No floors configured yet</p>
+                </div>
+              )}
+            </div>
+
+            {/* Areas Section */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Areas</h3>
+                <div className="flex gap-2">
+                  <Input
+                    value={newArea.name}
+                    onChange={(e) => setNewArea({...newArea, name: e.target.value})}
+                    placeholder="Area name"
+                    className="glass border-primary/20 w-40"
+                  />
+                  <Button 
+                    onClick={handleAddArea}
+                    className="neon-glow"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Area
+                  </Button>
+                </div>
+              </div>
+              
+              {areas.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {areas.map((area) => (
+                    <div key={area.id} className="border rounded-lg p-4 flex justify-between items-center">
+                      <span>{area.name}</span>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            setEditingArea(area)
+                            setNewArea({ name: area.name, icon: area.icon || "" })
+                          }}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => handleDeleteArea(area.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border rounded-lg p-4">
+                  <p className="text-muted-foreground text-center py-4">No areas configured yet</p>
+                </div>
+              )}
+            </div>
+
+            {/* Sub-Areas Section */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Sub-Areas</h3>
+                <div className="flex gap-2">
+                  <Input
+                    value={newArea.name}
+                    onChange={(e) => setNewArea({...newArea, name: e.target.value})}
+                    placeholder="Sub-area name"
+                    className="glass border-primary/20 w-40"
+                  />
+                  <Button 
+                    onClick={handleAddArea}
+                    className="neon-glow"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Sub-Area
+                  </Button>
+                </div>
+              </div>
+              
+              {areas.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {areas.map((area) => (
+                    <div key={area.id} className="border rounded-lg p-4 flex justify-between items-center">
+                      <span>{area.name}</span>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            setEditingArea(area)
+                            setNewArea({ name: area.name, icon: area.icon || "" })
+                          }}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => handleDeleteArea(area.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border rounded-lg p-4">
+                  <p className="text-muted-foreground text-center py-4">No sub-areas configured yet</p>
+                </div>
+              )}
             </div>
           </div>
         </Card>
+        </TabsContent>
+
+        <TabsContent value="users" className="space-y-6">
+            <UserList/>
         </TabsContent>
       </Tabs>
       

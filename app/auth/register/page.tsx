@@ -82,8 +82,25 @@ export default function RegisterPage() {
   const [isLocating, setIsLocating] = useState(false) 
   const [mapLoaded, setMapLoaded] = useState(false)
   const [isClient, setIsClient] = useState(false)
+  const [hasExistingUsers, setHasExistingUsers] = useState<boolean | null>(null)
   const searchTimeout = useRef<NodeJS.Timeout | null>(null)
   const mapRef = useRef<any>(null)
+
+  // Check if there are existing users
+  useEffect(() => {
+    const checkExistingUsers = async () => {
+      try {
+        const response = await apiClient.hasUsers();
+        if (response.success && response.data) {
+          setHasExistingUsers(response.data.has_users);
+        }
+      } catch (err) {
+        setHasExistingUsers(true);
+      }
+    };
+    
+    checkExistingUsers();
+  }, []);
 
   // Dynamically load Leaflet CSS files on the client side
   useEffect(() => {
@@ -157,7 +174,6 @@ export default function RegisterPage() {
         
         setSearchResults(processedData)
       } catch (err) {
-        console.error("Error searching locations:", err)
         setSearchResults([])
       } finally {
         setIsSearching(false)
@@ -173,14 +189,14 @@ export default function RegisterPage() {
 
   // Try to get user's current location on mount
   useEffect(() => {
-    if (step === 3 && isClient) {
+    if (step === 3 && hasExistingUsers === false && isClient) {
       // Small delay to ensure map is loaded
       const timer = setTimeout(() => {
         getCurrentLocation()
       }, 500)
       return () => clearTimeout(timer)
     }
-  }, [step, isClient])
+  }, [step, hasExistingUsers, isClient])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -188,7 +204,11 @@ export default function RegisterPage() {
     // Reset error state
     setError(null)
     
-    if (step < 3) {
+    // For the first user (admin), show all 3 steps
+    // For subsequent users, only show 2 steps
+    const totalSteps = hasExistingUsers === false ? 3 : 2;
+    
+    if (step < totalSteps) {
       // Validate current step before moving to next
       if (step === 1) {
         if (!formData.name.trim()) {
@@ -237,7 +257,9 @@ export default function RegisterPage() {
     }
     
     // Final step - submit registration
-    if (!selectedLocation) {
+    // For admin users (first user), location is required
+    // For non-admin users, we can submit without location
+    if (hasExistingUsers === false && !selectedLocation) {
       setError("Please select a location")
       return
     }
@@ -246,19 +268,29 @@ export default function RegisterPage() {
 
     try {
       // Use the extended signup method to handle all user information
-      const response = await apiClient.extendedSignup({
+      const signupData: any = {
         name: formData.name.trim(),
         email: formData.email.trim(),
         password: formData.password,
         mobile: formData.mobile.trim(),
         date_of_birth: formData.dateOfBirth,
-        location: {
+      }
+      
+      // Only include location for admin users (first user)
+      if (hasExistingUsers === false && selectedLocation) {
+        signupData.location = {
           latitude: selectedLocation.lat,
           longitude: selectedLocation.lon,
           address: selectedLocation.display_name
         }
-      })
-      console.log("Signup response:", response)
+      }
+      let response
+      if (hasExistingUsers === false) {
+        response = await apiClient.extendedSignup(signupData)
+      }
+      else {
+        response = await apiClient.signup(signupData)
+      }
       if (response.success && response.data) {
         // Store the auth token
         localStorage.setItem("authToken", response.data.token)
@@ -268,7 +300,6 @@ export default function RegisterPage() {
       }
     } catch (err) {
       setError("An unexpected error occurred. Please try again.")
-      console.error("Signup error:", err)
     } finally {
       setIsLoading(false)
     }
@@ -318,7 +349,6 @@ export default function RegisterPage() {
         })
       })
       .catch(err => {
-        console.warn("Error reverse geocoding:", err)
         setSelectedLocation({
           lat: lat,
           lon: lon,
@@ -343,7 +373,6 @@ export default function RegisterPage() {
 
     setIsLocating(true);
     setError(null);
-    console.log("Attempting to get current location...");
 
     // Try geolocation with different options as fallbacks
     const tryGeolocation = (options: PositionOptions, attempt: number) => {
@@ -357,7 +386,6 @@ export default function RegisterPage() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          console.log(`Geolocation success on attempt ${attempt}:`, { latitude, longitude });
           const currentPosition: [number, number] = [latitude, longitude];
           
           // Update map center and marker position
@@ -376,7 +404,6 @@ export default function RegisterPage() {
           fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`)
             .then(response => response.json())
             .then(data => {
-              console.log("Reverse geocoding response:", data);
               setSelectedLocation({
                 lat: latitude,
                 lon: longitude,
@@ -384,7 +411,6 @@ export default function RegisterPage() {
               });
             })
             .catch(err => {
-              console.warn("Error reverse geocoding:", err);
               setSelectedLocation({
                 lat: latitude,
                 lon: longitude,
@@ -396,24 +422,17 @@ export default function RegisterPage() {
             });
         },
         (error) => {
-          console.error(`Geolocation error on attempt ${attempt}:`, error);
-          
-          // If this is the first attempt, try again with different options
+  
           if (attempt === 1) {
-            console.log("Retrying geolocation with different options...");
-            // Try with high accuracy enabled
             tryGeolocation({
               enableHighAccuracy: true,
               timeout: 10000,
-              maximumAge: 300000 // 5 minutes
+              maximumAge: 300000 
             }, 2);
             return;
           }
           
-          // If this is the second attempt, try again with even more relaxed options
           if (attempt === 2) {
-            console.log("Retrying geolocation with relaxed options...");
-            // Try with high accuracy disabled and longer timeout
             tryGeolocation({
               enableHighAccuracy: false,
               timeout: 20000,
@@ -422,14 +441,11 @@ export default function RegisterPage() {
             return;
           }
           
-          // All attempts failed
           setIsLocating(false);
           let errorMessage = "Unable to retrieve your location. Please try searching instead.";
           
-          // Provide more specific error messages if we have error details
-          // Handle empty error objects which can occur in some browsers/security configurations
+
           if (error && typeof error === 'object') {
-            // Check if error object is empty
             const isEmpty = Object.keys(error).length === 0 && error.constructor === Object;
             
             if (isEmpty) {
@@ -498,6 +514,35 @@ export default function RegisterPage() {
     setSearchQuery(e.target.value)
   }
 
+  const getTotalSteps = () => {
+    return hasExistingUsers === false ? 3 : 2;
+  }
+
+  if (hasExistingUsers === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
+        <div className="absolute inset-0 grid-pattern opacity-10" />
+        <div className="w-full max-w-md relative z-10">
+          <Card className="glass-strong border-primary/20 p-8">
+            <div className="space-y-6">
+              <div className="text-center space-y-2">
+                <div className="inline-flex items-center gap-2 px-4 py-2 glass rounded-full border border-primary/30 mb-4">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-mono text-primary">Registration</span>
+                </div>
+                <h1 className="text-3xl font-bold neon-text">Create Account</h1>
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              </div>
+              <div className="flex justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
       <div className="absolute inset-0 grid-pattern opacity-10" />
@@ -520,14 +565,14 @@ export default function RegisterPage() {
                 <span className="text-xs font-mono text-primary">Registration</span>
               </div>
               <h1 className="text-3xl font-bold neon-text">Create Account</h1>
-              <p className="text-sm text-muted-foreground">Step {step} of 3</p>
+              <p className="text-sm text-muted-foreground">Step {step} of {getTotalSteps()}</p>
             </div>
 
             {/* Progress Bar */}
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-primary h-2 rounded-full transition-all duration-300" 
-                style={{ width: `${(step / 3) * 100}%` }}
+                style={{ width: `${(step / getTotalSteps()) * 100}%` }}
               ></div>
             </div>
 
@@ -746,8 +791,8 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* Step 3: Location Selection */}
-              {step === 3 && (
+              {/* Step 3: Location Selection - Only shown for the first user (admin) */}
+              {step === 3 && hasExistingUsers === false && (
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="locationSearch" className="text-sm font-medium">
@@ -891,7 +936,7 @@ export default function RegisterPage() {
                   className="flex-1 neon-glow" 
                   disabled={isLoading}
                 >
-                  {isLoading ? "Processing..." : step < 3 ? "Next" : "Create Account"}
+                  {isLoading ? "Processing..." : step < getTotalSteps() ? "Next" : "Create Account"}
                 </Button>
               </div>
             </form>
