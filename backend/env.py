@@ -97,6 +97,7 @@ log_sources = [
     "WEBHOOK",
     "SOCKET",
     "OAUTH",
+    "INTEGRATIONS"
 ]
 
 SRC_LOG_LEVELS = {}

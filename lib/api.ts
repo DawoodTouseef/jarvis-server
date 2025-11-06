@@ -973,6 +973,14 @@ export default class ApiClient {
     })
   }
 
+  // Ollama Model Pulling
+  async pullOllamaModel(modelName: string, urlIdx: number = 0): Promise<ApiResponse<any>> {
+    return this.request<any>(`/ollama/api/pull/${urlIdx}`, {
+      method: "POST",
+      body: JSON.stringify({ model: modelName }),
+    })
+  }
+
   async deleteAllModels(): Promise<ApiResponse<boolean>> {
     return this.request<boolean>("/api/v1/models/delete/all", {
       method: "DELETE",
@@ -1216,6 +1224,85 @@ export default class ApiClient {
     return this.request<any>("/api/v1/homeassistant/registry/areas", {
       method: "POST",
       body: JSON.stringify(areaData),
+    })
+  }
+
+  // New methods for floors, areas, and sub-areas
+  async getHomeAssistantFloors(): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>("/api/v1/homeassistant/floors", {
+      method: "GET",
+    })
+  }
+
+  async createHomeAssistantFloor(floorData: any): Promise<ApiResponse<any>> {
+    return this.request<any>("/api/v1/homeassistant/floors", {
+      method: "POST",
+      body: JSON.stringify(floorData),
+    })
+  }
+
+  async updateHomeAssistantFloor(floorId: number, floorData: any): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/homeassistant/floors/${floorId}`, {
+      method: "PUT",
+      body: JSON.stringify(floorData),
+    })
+  }
+
+  async deleteHomeAssistantFloor(floorId: number): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/homeassistant/floors/${floorId}`, {
+      method: "DELETE",
+    })
+  }
+
+  async getHomeAssistantAreasNew(): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>("/api/v1/homeassistant/areas", {
+      method: "GET",
+    })
+  }
+
+  async createHomeAssistantAreaNew(areaData: any): Promise<ApiResponse<any>> {
+    return this.request<any>("/api/v1/homeassistant/areas", {
+      method: "POST",
+      body: JSON.stringify(areaData),
+    })
+  }
+
+  async updateHomeAssistantArea(areaId: number, areaData: any): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/homeassistant/areas/${areaId}`, {
+      method: "PUT",
+      body: JSON.stringify(areaData),
+    })
+  }
+
+  async deleteHomeAssistantArea(areaId: number): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/homeassistant/areas/${areaId}`, {
+      method: "DELETE",
+    })
+  }
+
+  async getHomeAssistantSubAreas(): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>("/api/v1/homeassistant/sub_areas", {
+      method: "GET",
+    })
+  }
+
+  async createHomeAssistantSubArea(subAreaData: any): Promise<ApiResponse<any>> {
+    return this.request<any>("/api/v1/homeassistant/sub_areas", {
+      method: "POST",
+      body: JSON.stringify(subAreaData),
+    })
+  }
+
+  async updateHomeAssistantSubArea(subAreaId: number, subAreaData: any): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/homeassistant/sub_areas/${subAreaId}`, {
+      method: "PUT",
+      body: JSON.stringify(subAreaData),
+    })
+  }
+
+  async deleteHomeAssistantSubArea(subAreaId: number): Promise<ApiResponse<any>> {
+    return this.request<any>(`/api/v1/homeassistant/sub_areas/${subAreaId}`, {
+      method: "DELETE",
     })
   }
 
@@ -1467,6 +1554,113 @@ export default class ApiClient {
       body: JSON.stringify(config),
     })
   }
+  
+  // Audio Transcription Method
+  async transcribeAudio(file: File): Promise<ApiResponse<any>> {
+    // Check if file is empty
+    if (file.size === 0) {
+      return {
+        success: false,
+        error: "Selected file is empty. Please choose a valid audio file."
+      }
+    }
+    
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const url = `${this.baseUrl}/api/v1/audio/transcriptions`
+      
+      const headers: HeadersInit = {}
+      if (this.token) { 
+        headers.Authorization = `Bearer ${this.token}`
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: headers
+      })
+
+      let data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        // Handle non-JSON responses
+        const text = await response.text();
+        data = { message: text };
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.message || data.detail || data.error || `HTTP ${response.status}: ${response.statusText}`
+        }
+      }
+
+      return {
+        success: true,
+        data
+      }
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Network error"
+      }
+    }
+  }
+  
+  // Text to Speech Method
+  async textToSpeech(text: string): Promise<ApiResponse<Blob>> {
+    try {
+      const url = `${this.baseUrl}/api/v1/audio/speech`
+      
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      }
+      if (this.token) { 
+        (headers as Record<string, string>).Authorization = `Bearer ${this.token}`
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: JSON.stringify({ input: text }),
+        headers: headers
+      })
+
+      if (!response.ok) {
+        let errorData;
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          errorData = await response.json();
+        } else {
+          const text = await response.text();
+          errorData = { message: text };
+        }
+        
+        return {
+          success: false,
+          error: errorData.message || errorData.detail || errorData.error || `HTTP ${response.status}: ${response.statusText}`
+        }
+      }
+
+      // Return the audio as a Blob
+      const blob = await response.blob();
+      return {
+        success: true,
+        data: blob
+      }
+    } catch (error) {
+      console.error("Error in text-to-speech:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Network error"
+      }
+    }
+  }
+  
   async getgroups():Promise<ApiResponse<any>>{
     return this.request<any>("/api/v1/groups/")
   }

@@ -94,6 +94,7 @@ from backend.routers import (
     utils,
     scim,
     home_assistant,
+    floor_area_subarea,
 )
 
 from backend.routers.retrieval import (
@@ -1129,7 +1130,7 @@ app.state.config.TTS_AZURE_SPEECH_OUTPUT_FORMAT = AUDIO_TTS_AZURE_SPEECH_OUTPUT_
 
 app.state.faster_whisper_model = None
 app.state.speech_synthesiser = None
-app.state.speech_speaker_embeddings_dataset = None
+
 
 
 ########################################
@@ -1326,6 +1327,7 @@ if SCIM_ENABLED:
 
 # Home Assistant API
 app.include_router(home_assistant.router, prefix="/api/v1/homeassistant", tags=["HomeAssistant"])
+app.include_router(floor_area_subarea.router, prefix="/api/v1/floor-area-subarea", tags=["FloorAreaSubArea"])
 
 
 try:

@@ -267,7 +267,6 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      // Use the extended signup method to handle all user information
       const signupData: any = {
         name: formData.name.trim(),
         email: formData.email.trim(),
@@ -285,7 +284,8 @@ export default function RegisterPage() {
         }
       }
       let response
-      if (hasExistingUsers === false) {
+      if (!hasExistingUsers) {
+        console.log("Extended Signup")
         response = await apiClient.extendedSignup(signupData)
       }
       else {

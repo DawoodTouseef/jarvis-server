@@ -93,6 +93,8 @@ class ExtendSignupForm(SignupForm):
         "longitude": Optional[float],
         "address": Optional[str]
     }
+
+
 class AddUserForm(SignupForm):
     role: Optional[str] = "pending"
 

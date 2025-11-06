@@ -5,21 +5,47 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { apiClient } from "@/lib/api"
+
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem("authToken")
-    if (!token) {
-      router.push("/auth/login")
-    } else {
+    const checkAuth = async () => {
+      const token = localStorage.getItem("authToken")
+      if (!token) {
+        router.push("/auth/login")
+        setIsLoading(false)
+        return
+      }
+      
+      // Set token in API client
       apiClient.setToken(token)
-      setIsAuthenticated(true)
+      
+      // Verify token is still valid by making a simple API call
+      try {
+        const response = await apiClient.getSessionUser()
+        if (response.success) {
+          setIsAuthenticated(true)
+        } else {
+          // Token is invalid, redirect to login
+          localStorage.removeItem("authToken")
+          router.push("/auth/login")
+        }
+      } catch (error) {
+        // Error occurred, redirect to login
+        localStorage.removeItem("authToken")
+        router.push("/auth/login")
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    checkAuth()
   }, [router])
 
-  if (!isAuthenticated) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -28,6 +54,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     )
+  }
+
+  if (!isAuthenticated) {
+    return null
   }
 
   return <>{children}</>

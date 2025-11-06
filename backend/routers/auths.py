@@ -687,6 +687,31 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
 async def extend_signup(request: Request, response: Response, form_data: ExtendSignupForm):
     # First, perform the standard signup
     signup_response = await signup(request, response, form_data)
+    updated_data = {}
+    mobile = form_data.mobile
+    if mobile:
+        updated_data["info"] = {"mobile": mobile}
+    dob = form_data.date_of_birth
+    if dob:
+        # Convert string date to datetime.date object
+        if isinstance(dob, str):
+            try:
+                from datetime import datetime
+                # Handle different date formats
+                if '-' in dob:
+                    date_obj = datetime.strptime(dob, '%Y-%m-%d').date()
+                elif '/' in dob:
+                    date_obj = datetime.strptime(dob, '%Y/%m/%d').date()
+                else:
+                    date_obj = datetime.strptime(dob, '%Y%m%d').date()
+                updated_data["date_of_birth"] = date_obj
+            except ValueError:
+                # If date parsing fails, log the error but don't fail the signup
+                log.error(f"Failed to parse date_of_birth: {dob}")
+        else:
+            updated_data["date_of_birth"] = dob
+    
+    Users.update_user_by_id(signup_response["id"], updated_data)
     
     # If location data is provided, store it as a state
     if form_data.location and any([

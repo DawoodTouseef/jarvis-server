@@ -205,5 +205,52 @@ class StatisticsShortTerm(Base):
 class MigrationChanges(Base):
     __tablename__ = "migration_changes"
 
-    migration_id = Column(String(255), primary_key=True)
-    version = Column(SmallInteger, nullable=False)
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    floor_id = Column(Integer, nullable=True)
+    icon = Column(String(255), nullable=True)
+    label = Column(String(255), nullable=True)
+    image = Column(Text, nullable=True)
+    aliases = Column(Text, nullable=True)  # JSON string array
+
+
+# New models for floors, areas, and sub-areas
+class Floor(Base):
+    __tablename__ = "floors"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    level = Column(Integer, default=0)
+    icon = Column(String(255), nullable=True)
+    aliases = Column(Text, nullable=True)  # JSON string array
+
+    # Relationships
+    areas = relationship("Area", back_populates="floor")
+
+
+class Area(Base):
+    __tablename__ = "areas"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    floor_id = Column(Integer, ForeignKey("floors.id", ondelete="RESTRICT"), nullable=True)
+    icon = Column(String(255), nullable=True)
+    label = Column(String(255), nullable=True)
+    image = Column(Text, nullable=True)
+    aliases = Column(Text, nullable=True)  # JSON string array
+
+    # Relationships
+    floor = relationship("Floor", foreign_keys=[floor_id], back_populates="areas")
+    sub_areas = relationship("SubArea", back_populates="area")
+
+
+class SubArea(Base):
+    __tablename__ = "sub_areas"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), nullable=False)
+    area_id = Column(Integer, ForeignKey("areas.id", ondelete="RESTRICT"), nullable=False)
+    icon = Column(String(255), nullable=True)
+
+    # Relationships
+    area = relationship("Area", foreign_keys=[area_id], back_populates="sub_areas")

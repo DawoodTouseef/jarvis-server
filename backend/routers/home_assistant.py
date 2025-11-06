@@ -12,7 +12,8 @@ from backend.utils.auth import get_current_user, get_verified_user
 from backend.models.homeassistant import (
     Events, EventData, EventTypes, States, StateAttributes, 
     StatesMeta, StatisticsMeta, Statistics, StatisticsShortTerm,
-    RecorderRuns, SchemaChanges, MigrationChanges
+    RecorderRuns, SchemaChanges, MigrationChanges,
+    Floor, Area, SubArea  
 )
 from backend.models.home_assistant_schemas import (
     EventDataCreate, EventOut, StateCreate, StateOut, 
@@ -21,7 +22,10 @@ from backend.models.home_assistant_schemas import (
     SchemaChangesCreate, MigrationChangesCreate, ConfigOut,
     EventTypesCreate, EventTypesOut, ServiceOut, HistoryOut, OverviewOut,
     StatisticsMetaOut, StatisticsOut, StatisticsShortTermOut,
-    RecorderRunsOut, SchemaChangesOut, MigrationChangesOut
+    RecorderRunsOut, SchemaChangesOut, MigrationChangesOut,
+    FloorCreate, FloorUpdate, FloorOut,  
+    AreaCreate, AreaUpdate, AreaOut,
+    SubAreaCreate, SubAreaUpdate, SubAreaOut
 )
 from backend.models.home_assistant_controllers import (
     EventsCtrl, StatesCtrl, StatisticsCtrl, StatesMetaCtrl,
@@ -30,6 +34,7 @@ from backend.models.home_assistant_controllers import (
     MigrationChangesCtrl, StatisticsShortTermCtrl, StatisticsRunsCtrl
 )
 import ast
+import json
 router = APIRouter()
 
 # Logger
@@ -41,6 +46,23 @@ def serialize_datetime(dt: datetime) -> str:
     if dt:
         return dt.isoformat()
     return None
+
+# Helper function to parse JSON arrays
+def parse_json_array(json_str: str) -> List[str]:
+    """Parse JSON string array"""
+    if not json_str:
+        return []
+    try:
+        return json.loads(json_str)
+    except:
+        return []
+
+# Helper function to serialize arrays to JSON
+def serialize_array(arr: List[str]) -> str:
+    """Serialize array to JSON string"""
+    if not arr:
+        return "[]"
+    return json.dumps(arr)
 
 ############################
 # System / Info Endpoints
@@ -109,6 +131,478 @@ async def get_overview(user=Depends(get_verified_user)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get overview"
+        )
+
+############################
+# Floor Endpoints
+############################
+
+@router.get("/floors", response_model=List[FloorOut], summary="Get All Floors")
+async def get_floors(user=Depends(get_verified_user)):
+    """Return list of all floors."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            floors = db.query(Floor).all()
+            result = []
+            for floor in floors:
+                result.append(FloorOut(
+                    id=floor.id,
+                    name=floor.name,
+                    level=floor.level,
+                    icon=floor.icon,
+                    aliases=parse_json_array(floor.aliases)
+                ))
+            return result
+    except Exception as e:
+        log.error(f"Error getting floors: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get floors"
+        )
+
+@router.get("/floors/{floor_id}", response_model=FloorOut, summary="Get Floor by ID")
+async def get_floor_by_id(floor_id: int, user=Depends(get_verified_user)):
+    """Return a specific floor by ID."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            floor = db.query(Floor).filter(Floor.id == floor_id).first()
+            if not floor:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Floor not found"
+                )
+            
+            return FloorOut(
+                id=floor.id,
+                name=floor.name,
+                level=floor.level,
+                icon=floor.icon,
+                aliases=parse_json_array(floor.aliases)
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error getting floor {floor_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get floor"
+        )
+
+@router.post("/floors", response_model=FloorOut, status_code=status.HTTP_201_CREATED, summary="Create Floor")
+async def create_floor(floor_data: FloorCreate, user=Depends(get_verified_user)):
+    """Create a new floor."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            floor = Floor(
+                name=floor_data.name,
+                level=floor_data.level,
+                icon=floor_data.icon,
+                aliases=serialize_array(floor_data.aliases) if floor_data.aliases else None
+            )
+            
+            db.add(floor)
+            db.commit()
+            db.refresh(floor)
+            
+            return FloorOut(
+                id=floor.id,
+                name=floor.name,
+                level=floor.level,
+                icon=floor.icon,
+                aliases=parse_json_array(floor.aliases)
+            )
+    except Exception as e:
+        log.error(f"Error creating floor: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create floor"
+        )
+
+@router.put("/floors/{floor_id}", response_model=FloorOut, summary="Update Floor")
+async def update_floor(floor_id: int, floor_data: FloorUpdate, user=Depends(get_verified_user)):
+    """Update an existing floor."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            floor = db.query(Floor).filter(Floor.id == floor_id).first()
+            if not floor:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Floor not found"
+                )
+            
+            # Update fields if provided
+            if floor_data.name is not None:
+                floor.name = floor_data.name
+            if floor_data.level is not None:
+                floor.level = floor_data.level
+            if floor_data.icon is not None:
+                floor.icon = floor_data.icon
+            if floor_data.aliases is not None:
+                floor.aliases = serialize_array(floor_data.aliases)
+            
+            db.commit()
+            db.refresh(floor)
+            
+            return FloorOut(
+                id=floor.id,
+                name=floor.name,
+                level=floor.level,
+                icon=floor.icon,
+                aliases=parse_json_array(floor.aliases)
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error updating floor {floor_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update floor"
+        )
+
+@router.delete("/floors/{floor_id}", response_model=bool, summary="Delete Floor")
+async def delete_floor(floor_id: int, user=Depends(get_verified_user)):
+    """Delete a floor by ID."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            floor = db.query(Floor).filter(Floor.id == floor_id).first()
+            if not floor:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Floor not found"
+                )
+                
+            db.delete(floor)
+            db.commit()
+            return True
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error deleting floor {floor_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete floor"
+        )
+
+############################
+# Area Endpoints
+############################
+
+@router.get("/areas", response_model=List[AreaOut], summary="Get All Areas")
+async def get_areas(user=Depends(get_verified_user)):
+    """Return list of all areas."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            areas = db.query(Area).all()
+            result = []
+            for area in areas:
+                result.append(AreaOut(
+                    id=area.id,
+                    name=area.name,
+                    floor_id=area.floor_id,
+                    icon=area.icon,
+                    label=area.label,
+                    image=area.image,
+                    aliases=parse_json_array(area.aliases)
+                ))
+            return result
+    except Exception as e:
+        log.error(f"Error getting areas: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get areas"
+        )
+
+@router.get("/areas/{area_id}", response_model=AreaOut, summary="Get Area by ID")
+async def get_area_by_id(area_id: int, user=Depends(get_verified_user)):
+    """Return a specific area by ID."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            area = db.query(Area).filter(Area.id == area_id).first()
+            if not area:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Area not found"
+                )
+            
+            return AreaOut(
+                id=area.id,
+                name=area.name,
+                floor_id=area.floor_id,
+                icon=area.icon,
+                label=area.label,
+                image=area.image,
+                aliases=parse_json_array(area.aliases)
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error getting area {area_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get area"
+        )
+
+@router.post("/areas", response_model=AreaOut, status_code=status.HTTP_201_CREATED, summary="Create Area")
+async def create_area(area_data: AreaCreate, user=Depends(get_verified_user)):
+    """Create a new area."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            area = Area(
+                name=area_data.name,
+                floor_id=area_data.floor_id,
+                icon=area_data.icon,
+                label=area_data.label,
+                image=area_data.image,
+                aliases=serialize_array(area_data.aliases) if area_data.aliases else None
+            )
+            
+            db.add(area)
+            db.commit()
+            db.refresh(area)
+            
+            return AreaOut(
+                id=area.id,
+                name=area.name,
+                floor_id=area.floor_id,
+                icon=area.icon,
+                label=area.label,
+                image=area.image,
+                aliases=parse_json_array(area.aliases)
+            )
+    except Exception as e:
+        log.error(f"Error creating area: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create area"
+        )
+
+@router.put("/areas/{area_id}", response_model=AreaOut, summary="Update Area")
+async def update_area(area_id: int, area_data: AreaUpdate, user=Depends(get_verified_user)):
+    """Update an existing area."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            area = db.query(Area).filter(Area.id == area_id).first()
+            if not area:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Area not found"
+                )
+            
+            # Update fields if provided
+            if area_data.name is not None:
+                area.name = area_data.name
+            if area_data.floor_id is not None:
+                area.floor_id = area_data.floor_id
+            if area_data.icon is not None:
+                area.icon = area_data.icon
+            if area_data.label is not None:
+                area.label = area_data.label
+            if area_data.image is not None:
+                area.image = area_data.image
+            if area_data.aliases is not None:
+                area.aliases = serialize_array(area_data.aliases)
+            
+            db.commit()
+            db.refresh(area)
+            
+            return AreaOut(
+                id=area.id,
+                name=area.name,
+                floor_id=area.floor_id,
+                icon=area.icon,
+                label=area.label,
+                image=area.image,
+                aliases=parse_json_array(area.aliases)
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error updating area {area_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update area"
+        )
+
+@router.delete("/areas/{area_id}", response_model=bool, summary="Delete Area")
+async def delete_area(area_id: int, user=Depends(get_verified_user)):
+    """Delete an area by ID."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            area = db.query(Area).filter(Area.id == area_id).first()
+            if not area:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Area not found"
+                )
+                
+            db.delete(area)
+            db.commit()
+            return True
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error deleting area {area_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete area"
+        )
+
+############################
+# Sub-Area Endpoints
+############################
+
+@router.get("/sub_areas", response_model=List[SubAreaOut], summary="Get All Sub-Areas")
+async def get_sub_areas(user=Depends(get_verified_user)):
+    """Return list of all sub-areas."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            sub_areas = db.query(SubArea).all()
+            result = []
+            for sub_area in sub_areas:
+                result.append(SubAreaOut(
+                    id=sub_area.id,
+                    name=sub_area.name,
+                    area_id=sub_area.area_id,
+                    icon=sub_area.icon
+                ))
+            return result
+    except Exception as e:
+        log.error(f"Error getting sub-areas: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get sub-areas"
+        )
+
+@router.get("/sub_areas/{sub_area_id}", response_model=SubAreaOut, summary="Get Sub-Area by ID")
+async def get_sub_area_by_id(sub_area_id: int, user=Depends(get_verified_user)):
+    """Return a specific sub-area by ID."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            sub_area = db.query(SubArea).filter(SubArea.id == sub_area_id).first()
+            if not sub_area:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Sub-area not found"
+                )
+            
+            return SubAreaOut(
+                id=sub_area.id,
+                name=sub_area.name,
+                area_id=sub_area.area_id,
+                icon=sub_area.icon
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error getting sub-area {sub_area_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get sub-area"
+        )
+
+@router.post("/sub_areas", response_model=SubAreaOut, status_code=status.HTTP_201_CREATED, summary="Create Sub-Area")
+async def create_sub_area(sub_area_data: SubAreaCreate, user=Depends(get_verified_user)):
+    """Create a new sub-area."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            sub_area = SubArea(
+                name=sub_area_data.name,
+                area_id=sub_area_data.area_id,
+                icon=sub_area_data.icon
+            )
+            
+            db.add(sub_area)
+            db.commit()
+            db.refresh(sub_area)
+            
+            return SubAreaOut(
+                id=sub_area.id,
+                name=sub_area.name,
+                area_id=sub_area.area_id,
+                icon=sub_area.icon
+            )
+    except Exception as e:
+        log.error(f"Error creating sub-area: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create sub-area"
+        )
+
+@router.put("/sub_areas/{sub_area_id}", response_model=SubAreaOut, summary="Update Sub-Area")
+async def update_sub_area(sub_area_id: int, sub_area_data: SubAreaUpdate, user=Depends(get_verified_user)):
+    """Update an existing sub-area."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            sub_area = db.query(SubArea).filter(SubArea.id == sub_area_id).first()
+            if not sub_area:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Sub-area not found"
+                )
+            
+            # Update fields if provided
+            if sub_area_data.name is not None:
+                sub_area.name = sub_area_data.name
+            if sub_area_data.area_id is not None:
+                sub_area.area_id = sub_area_data.area_id
+            if sub_area_data.icon is not None:
+                sub_area.icon = sub_area_data.icon
+            
+            db.commit()
+            db.refresh(sub_area)
+            
+            return SubAreaOut(
+                id=sub_area.id,
+                name=sub_area.name,
+                area_id=sub_area.area_id,
+                icon=sub_area.icon
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error updating sub-area {sub_area_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update sub-area"
+        )
+
+@router.delete("/sub_areas/{sub_area_id}", response_model=bool, summary="Delete Sub-Area")
+async def delete_sub_area(sub_area_id: int, user=Depends(get_verified_user)):
+    """Delete a sub-area by ID."""
+    try:
+        from backend.internal.db import get_db
+        with get_db() as db:
+            sub_area = db.query(SubArea).filter(SubArea.id == sub_area_id).first()
+            if not sub_area:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Sub-area not found"
+                )
+                
+            db.delete(sub_area)
+            db.commit()
+            return True
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error deleting sub-area {sub_area_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete sub-area"
         )
 
 ############################

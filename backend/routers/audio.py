@@ -256,7 +256,8 @@ async def update_audio_config(
         form_data.stt.AZURE_MAX_SPEAKERS
     )
 
-    if request.app.state.config.STT_ENGINE == "":
+    if request.app.state.config.STT_ENGINE == "whisper":
+        log.info("Using Whisper for STT")
         request.app.state.faster_whisper_model = set_faster_whisper_model(
             form_data.stt.WHISPER_MODEL, WHISPER_MODEL_AUTO_UPDATE
         )
@@ -295,30 +296,23 @@ async def update_audio_config(
 
 
 def load_speech_pipeline(request):
-    from transformers import pipeline
-    from datasets import load_dataset
-
     if request.app.state.speech_synthesiser is None:
-        request.app.state.speech_synthesiser = pipeline(
-            "text-to-speech", "microsoft/speecht5_tts"
-        )
+        from transformers import AutoModel
+        request.app.state.speech_synthesiser = AutoModel.from_pretrained("suno/bark-small")
 
-    if request.app.state.speech_speaker_embeddings_dataset is None:
-        request.app.state.speech_speaker_embeddings_dataset = load_dataset(
-            "Matthijs/cmu-arctic-xvectors", split="validation"
-        )
 
 
 @router.post("/speech")
 async def speech(request: Request, user=Depends(get_verified_user)):
     body = await request.body()
+    
     name = hashlib.sha256(
         body
         + str(request.app.state.config.TTS_ENGINE).encode("utf-8")
         + str(request.app.state.config.TTS_MODEL).encode("utf-8")
     ).hexdigest()
 
-    file_path = SPEECH_CACHE_DIR.joinpath(f"{name}.mp3")
+    file_path = SPEECH_CACHE_DIR.joinpath(f"{name}.wav")
     file_body_path = SPEECH_CACHE_DIR.joinpath(f"{name}.json")
 
     # Check if the file already exists in the cache
@@ -513,6 +507,7 @@ async def speech(request: Request, user=Depends(get_verified_user)):
             )
 
     elif request.app.state.config.TTS_ENGINE == "transformers":
+        log.info(f"Engine: {request.app.state.config.TTS_ENGINE}")
         payload = None
         try:
             payload = json.loads(body.decode("utf-8"))
@@ -520,31 +515,31 @@ async def speech(request: Request, user=Depends(get_verified_user)):
             log.exception(e)
             raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-        import torch
-        import soundfile as sf
+        import scipy
 
         load_speech_pipeline(request)
 
-        embeddings_dataset = request.app.state.speech_speaker_embeddings_dataset
-
-        speaker_index = 6799
-        try:
-            speaker_index = embeddings_dataset["filename"].index(
-                request.app.state.config.TTS_MODEL
-            )
-        except Exception:
-            pass
-
-        speaker_embedding = torch.tensor(
-            embeddings_dataset[speaker_index]["xvector"]
-        ).unsqueeze(0)
-
-        speech = request.app.state.speech_synthesiser(
-            payload["input"],
-            forward_params={"speaker_embeddings": speaker_embedding},
-        )
-
-        sf.write(file_path, speech["audio"], samplerate=speech["sampling_rate"])
+        # Use the Bark model correctly
+        import torch
+        import numpy as np
+        from transformers import AutoProcessor
+        
+        # Load processor for Bark
+        processor = AutoProcessor.from_pretrained("suno/bark-small")
+        
+        # Process the input text
+        inputs = processor(payload["input"])
+        
+        # Generate speech using the model
+        speech = request.app.state.speech_synthesiser.generate(**inputs, do_sample=True)
+        
+        # Convert to audio
+        sampling_rate = request.app.state.speech_synthesiser.generation_config.sample_rate
+        audio_array = speech.cpu().numpy().squeeze()
+        
+        import scipy.io.wavfile
+    
+        scipy.io.wavfile.write(file_path, rate=sampling_rate, data=audio_array)
 
         async with aiofiles.open(file_body_path, "w") as f:
             await f.write(json.dumps(payload))
@@ -556,6 +551,10 @@ def transcription_handler(request, file_path, metadata):
     filename = os.path.basename(file_path)
     file_dir = os.path.dirname(file_path)
     id = filename.split(".")[0]
+    
+    # Check if file exists and is not empty
+    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        raise Exception("Audio file is empty or does not exist")
 
     metadata = metadata or {}
 
@@ -563,8 +562,8 @@ def transcription_handler(request, file_path, metadata):
         metadata.get("language", None) if not WHISPER_LANGUAGE else WHISPER_LANGUAGE,
         None,  # Always fallback to None in case transcription fails
     ]
-
-    if request.app.state.config.STT_ENGINE == "":
+    log.info(f"Engine:{request.app.state.config.STT_ENGINE}")
+    if request.app.state.config.STT_ENGINE == "whisper":
         if request.app.state.faster_whisper_model is None:
             request.app.state.faster_whisper_model = set_faster_whisper_model(
                 request.app.state.config.WHISPER_MODEL
@@ -590,7 +589,7 @@ def transcription_handler(request, file_path, metadata):
         with open(transcript_file, "w") as f:
             json.dump(data, f)
 
-        log.debug(data)
+        log.info(f"Transcript: {data['text']}")
         return data
     elif request.app.state.config.STT_ENGINE == "openai":
         r = None
@@ -831,6 +830,13 @@ def transcription_handler(request, file_path, metadata):
 
 def transcribe(request: Request, file_path: str, metadata: Optional[dict] = None):
     log.info(f"transcribe: {file_path} {metadata}")
+    
+    # Check if file exists and is not empty
+    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Audio file is empty or does not exist"
+        )
 
     if is_audio_conversion_required(file_path):
         file_path = convert_audio_to_mp3(file_path)
@@ -977,6 +983,13 @@ def transcription(
 
         filename = f"{id}.{ext}"
         contents = file.file.read()
+        
+        # Check if the file is empty
+        if len(contents) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded audio file is empty"
+            )
 
         file_dir = f"{CACHE_DIR}/audio/transcriptions"
         os.makedirs(file_dir, exist_ok=True)

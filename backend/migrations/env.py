@@ -16,6 +16,9 @@ from backend.models.homeassistant import (
     Statistics,
     StatisticsShortTerm,
     MigrationChanges,
+    Floor,
+    Area,
+    SubArea,
 )
 from backend.env import DATABASE_URL, DATABASE_PASSWORD
 from sqlalchemy import engine_from_config, pool, create_engine
@@ -38,7 +41,7 @@ from sqlalchemy import MetaData
 target_metadata = MetaData()
 for model in [Auth, EventData, EventTypes, StateAttributes, StatesMeta, StatisticsMeta, 
               RecorderRuns, SchemaChanges, StatisticsRuns, Events, States, Statistics, 
-              StatisticsShortTerm, MigrationChanges]:
+              StatisticsShortTerm, MigrationChanges, Floor, Area, SubArea]:
     for table in model.metadata.tables.values():
         table.tometadata(target_metadata)
 

@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Cpu, Plus, Settings, Trash2, Activity, Zap, Search, Loader2 } from "lucide-react"
+import { Cpu, Plus, Settings, Trash2, Activity, Zap, Search, Loader2, Edit } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { apiClient } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
-
+import { ModelEditForm } from "@/components/model-edit-form"
+import { ModelAddForm } from "@/components/model-add-form"
 // Updated interface to match the actual API response structure
 interface Model {
   id: string
@@ -44,6 +45,7 @@ interface Model {
   access_control?: Record<string, any> | null
   updated_at?: number
   created_at?: number
+  is_active?: boolean
   // Ollama specific properties
   ollama?: {
     name: string
@@ -82,17 +84,34 @@ export function ModelManagement() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isOllamaDialogOpen, setIsOllamaDialogOpen] = useState(false)
+  const [editingModel, setEditingModel] = useState<Model | null>(null)
   const [newModel, setNewModel] = useState({
     id: "",
+    base_model_id: "",
     name: "",
-    provider: "openai",
-    type: "chat",
-    apiKey: "",
-    baseUrl: "",
+    meta: {
+      profile_image_url: "",
+      description: "",
+      capabilities: {}
+    },
+    params: {},
+    access_control: null,
+    is_active: true,
   })
+
+   
   const [openAIConfig, setOpenAIConfig] = useState<any>(null)
   const [ollamaConfig, setOllamaConfig] = useState<any>(null)
-
+  const [ollamaInstances, setOllamaInstances] = useState<string[]>([])
+  const [selectedOllamaInstance, setSelectedOllamaInstance] = useState<number>(0)
+  const [ollamaModelTag, setOllamaModelTag] = useState("")
+  const [ollamaModels, setOllamaModels] = useState<any[]>([])
+  const [selectedOllamaModelToDelete, setSelectedOllamaModelToDelete] = useState("")
+  const [ollamaCreateModelTag, setOllamaCreateModelTag] = useState("")
+  const [ollamaCreateModelContent, setOllamaCreateModelContent] = useState("")
+  const [showmodelmeta, setshowModelmeta] = useState<boolean>(false)
+  const [modelimage, setmodelimage] = useState<"upload" | "url">("upload")
   // Fetch models and configurations from API
   useEffect(() => {
     fetchModels()
@@ -117,18 +136,19 @@ export function ModelManagement() {
           if (model.ollama) {
             provider = "ollama"
             type = "text-generation"
-            requests = Math.floor(Math.random() * 1000)
-            latency = `${Math.floor(Math.random() * 100)}ms`
+            // Use model-specific data if available, otherwise default values
+            requests = model.requests || model.ollama.requests || 0
+            latency = model.latency || model.ollama.latency || "0ms"
           } else if (model.arena) {
             provider = "arena"
             type = "arena"
-            requests = Math.floor(Math.random() * 5000)
-            latency = `${Math.floor(Math.random() * 200)}ms`
+            requests = model.requests || 0
+            latency = model.latency || "0ms"
           } else if (model.owned_by === "openai") {
             provider = "openai"
             type = "text-generation"
-            requests = Math.floor(Math.random() * 2000)
-            latency = `${Math.floor(Math.random() * 150)}ms`
+            requests = model.requests || 0
+            latency = model.latency || "0ms"
           }
           
           return {
@@ -138,6 +158,7 @@ export function ModelManagement() {
             type,
             requests,
             latency,
+            is_active: model.is_active !== undefined ? model.is_active : true, // Default to true if not specified
             user_id: model.user_id || "system",
             params: model.params || {},
             meta: model.meta || {},
@@ -146,7 +167,7 @@ export function ModelManagement() {
             created_at: model.created_at || model.created,
           }
         })
-        setModels(transformedModels)
+        setModels(transformedModels.filter((model:any)=>!model.arena))
       } else {
         toast({
           title: "Error",
@@ -155,7 +176,6 @@ export function ModelManagement() {
         })
       }
     } catch (error) {
-      console.error(error)
       toast({
         title: "Error",
         description: "Failed to fetch models",
@@ -165,7 +185,7 @@ export function ModelManagement() {
       setLoading(false)
     }
   }
-
+  
   const fetchConfigurations = async () => {
     try {
       // Fetch OpenAI configuration
@@ -178,23 +198,49 @@ export function ModelManagement() {
       const ollamaResponse = await apiClient.getOllamaConfig()
       if (ollamaResponse.success) {
         setOllamaConfig(ollamaResponse.data)
+        if (ollamaResponse.data.OLLAMA_BASE_URLS) {
+          setOllamaInstances(ollamaResponse.data.OLLAMA_BASE_URLS)
+        }
       }
     } catch (error) {
       console.error("Failed to fetch configurations", error)
     }
   }
 
-  const filteredModels = models.filter(
+  const fetchOllamaModels = async (urlIdx: number) => {
+    try {
+      const response = await apiClient.getOllamaModels(urlIdx)
+      if (response.success && response.data) {
+        setOllamaModels(response.data.models || [])
+      }
+    } catch (error) {
+      console.error("Failed to fetch Ollama models", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch Ollama models",
+        variant: "destructive",
+      })
+    }
+  }
+
+  let filteredModels = models.filter(
     (model) =>
       model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (model.provider && model.provider.toLowerCase().includes(searchQuery.toLowerCase())) ||
       model.id.toLowerCase().includes(searchQuery.toLowerCase()),
   )
-
+  useEffect(() => {
+    filteredModels = models.filter(
+    (model) =>
+      model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (model.provider && model.provider.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      model.id.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
+  }, [searchQuery])
   const toggleModelStatus = async (id: string) => {
     try {
       const response = await apiClient.toggleModelStatus(id)
-      
+      console.log(response)
       if (response.success) {
         setModels((prev) =>
           prev.map((model) =>
@@ -226,6 +272,7 @@ export function ModelManagement() {
     }
   }
 
+
   const deleteModel = async (id: string) => {
     try {
       const response = await apiClient.deleteModel(id)
@@ -252,95 +299,46 @@ export function ModelManagement() {
     }
   }
 
-  const handleAddModel = async () => {
-    try {
-      // Create model form data
-      const modelData = {
-        id: newModel.id || `${newModel.provider}-${Date.now()}`,
-        name: newModel.name,
-        base_model_id: null,
-        meta: {
-          provider: newModel.provider,
-          type: newModel.type,
-          api_key: newModel.apiKey,
-          base_url: newModel.baseUrl || (newModel.provider === "openai" 
-            ? (openAIConfig?.OPENAI_API_BASE_URLS?.[0] || "https://api.openai.com/v1")
-            : (ollamaConfig?.OLLAMA_BASE_URLS?.[0] || "http://localhost:11434")),
-        },
-        params: {},
-        is_active: true,
-        access_control: null,
-      }
 
-      const response = await apiClient.createNewModel(modelData)
-      
-      if (response.success) {
-        // Refresh the models list
-        await fetchModels()
-        setIsAddDialogOpen(false)
-        setNewModel({
-          id: "",
-          name: "",
-          provider: "openai",
-          type: "chat",
-          apiKey: "",
-          baseUrl: "",
-        })
-        toast({
-          title: "Success",
-          description: "Model added successfully",
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: response.error || "Failed to add model",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add model",
-        variant: "destructive",
-      })
-    }
+  
+
+  const handleEditModel = (model: Model) => {
+    setEditingModel(model)
   }
 
-  const verifyConnection = async (provider: string) => {
-    try {
-      let response;
-      if (provider === "openai") {
-        response = await apiClient.verifyOpenAIConnection({
-          url: newModel.baseUrl || (openAIConfig?.OPENAI_API_BASE_URLS?.[0] || "https://api.openai.com/v1"),
-          key: newModel.apiKey,
-        })
-      } else if (provider === "ollama") {
-        response = await apiClient.verifyOllamaConnection({
-          url: newModel.baseUrl || (ollamaConfig?.OLLAMA_BASE_URLS?.[0] || "http://localhost:11434"),
-          key: newModel.apiKey,
-        })
-      }
-
-      if (response?.success) {
-        toast({
-          title: "Success",
-          description: `${provider} connection verified successfully`,
-        })
-      } else {
-        toast({
-          title: "Error",
-          description: response?.error || `Failed to verify ${provider} connection`,
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: `Failed to verify ${provider} connection`,
-        variant: "destructive",
-      })
-    }
+  const handleSaveEditedModel = (updatedModel: Model) => {
+    setModels(prevModels => 
+      prevModels.map(model => 
+        model.id === updatedModel.id ? updatedModel : model
+      )
+    )
+    setEditingModel(null)
+    fetchModels()
+    toast({
+      title: "Success",
+      description: "Model updated successfully",
+    })
   }
+
+  const handleCancelEdit = () => {
+    setEditingModel(null)
+  }
+
+  const handleAddModel = () => {
+    setIsAddDialogOpen(false)
+    fetchModels()
+    toast({
+      title: "Success",
+      description: "Model created successfully",
+    })
+  }
+
+  // When Ollama instance changes, fetch models for that instance
+  useEffect(() => {
+    if (isOllamaDialogOpen && ollamaInstances.length > 0) {
+      fetchOllamaModels(selectedOllamaInstance)
+    }
+  }, [selectedOllamaInstance, isOllamaDialogOpen, ollamaInstances.length])
 
   if (loading) {
     return (
@@ -350,6 +348,23 @@ export function ModelManagement() {
     )
   }
 
+  // If we're editing a model, show the edit form
+  if (editingModel) {
+    return (
+      <ModelEditForm 
+        model={editingModel} 
+        onSave={handleSaveEditedModel} 
+        onCancel={handleCancelEdit} 
+      />
+    )
+  }
+  if (isAddDialogOpen) return (
+    <ModelAddForm 
+      models={models}
+      onSave={handleSaveEditedModel}
+      onCancel={handleAddModel}
+    />
+  )
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -358,88 +373,12 @@ export function ModelManagement() {
           <h1 className="text-4xl font-bold neon-text mb-2">AI Models</h1>
           <p className="text-muted-foreground">Manage and configure your AI model integrations</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Model
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Model</DialogTitle>
-              <DialogDescription>
-                Configure a new AI model integration
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Model ID</Label>
-                <Input
-                  placeholder="Enter model ID"
-                  value={newModel.id}
-                  onChange={(e) => setNewModel({...newModel, id: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Model Name</Label>
-                <Input
-                  placeholder="Enter model name"
-                  value={newModel.name}
-                  onChange={(e) => setNewModel({...newModel, name: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Provider</Label>
-                <Select 
-                  value={newModel.provider} 
-                  onValueChange={(value) => setNewModel({...newModel, provider: value})}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="openai">OpenAI</SelectItem>
-                    <SelectItem value="ollama">Ollama</SelectItem>
-                    <SelectItem value="arena">Arena</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Base URL</Label>
-                <Input
-                  placeholder={newModel.provider === "openai" 
-                    ? "https://api.openai.com/v1" 
-                    : "http://localhost:11434"}
-                  value={newModel.baseUrl}
-                  onChange={(e) => setNewModel({...newModel, baseUrl: e.target.value})}
-                />
-              </div>
-              {newModel.provider === "openai" && (
-                <div className="space-y-2">
-                  <Label>API Key</Label>
-                  <Input
-                    type="password"
-                    placeholder="Enter API key"
-                    value={newModel.apiKey}
-                    onChange={(e) => setNewModel({...newModel, apiKey: e.target.value})}
-                  />
-                </div>
-              )}
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => verifyConnection(newModel.provider)}
-                >
-                  Verify Connection
-                </Button>
-                <Button onClick={handleAddModel}>
-                  Add Model
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Model
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -553,8 +492,14 @@ export function ModelManagement() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="icon" variant="ghost" className="hover:bg-primary/10">
-                    <Settings className="w-4 h-4" />
+                  
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="hover:bg-primary/10"
+                    onClick={() => handleEditModel(model)}
+                  >
+                    <Edit className="w-4 h-4" />
                   </Button>
                   <Button
                     size="icon"

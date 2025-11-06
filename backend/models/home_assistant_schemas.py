@@ -251,3 +251,82 @@ class OverviewOut(BaseModel):
     entities_count: int
     statistics_meta_count: int
     current_schema_version: int
+
+
+# New schemas for floors, areas, and sub-areas
+class FloorCreate(BaseModel):
+    name: str
+    level: Optional[int] = 0
+    icon: Optional[str] = None
+    aliases: Optional[List[str]] = []
+
+
+class FloorUpdate(BaseModel):
+    name: Optional[str] = None
+    level: Optional[int] = None
+    icon: Optional[str] = None
+    aliases: Optional[List[str]] = None
+
+
+class FloorOut(BaseModel):
+    id: int
+    name: str
+    level: Optional[int]
+    icon: Optional[str]
+    aliases: Optional[List[str]]
+
+    class Config:
+        orm_mode = True
+
+
+class AreaCreate(BaseModel):
+    name: str
+    floor_id: Optional[int] = None
+    icon: Optional[str] = None
+    label: Optional[str] = None
+    image: Optional[str] = None
+    aliases: Optional[List[str]] = []
+
+
+class AreaUpdate(BaseModel):
+    name: Optional[str] = None
+    floor_id: Optional[int] = None
+    icon: Optional[str] = None
+    label: Optional[str] = None
+    image: Optional[str] = None
+    aliases: Optional[List[str]] = None
+
+
+class AreaOut(BaseModel):
+    id: int
+    name: str
+    floor_id: Optional[int]
+    icon: Optional[str]
+    label: Optional[str]
+    image: Optional[str]
+    aliases: Optional[List[str]]
+
+    class Config:
+        orm_mode = True
+
+
+class SubAreaCreate(BaseModel):
+    name: str
+    area_id: int
+    icon: Optional[str] = None
+
+
+class SubAreaUpdate(BaseModel):
+    name: Optional[str] = None
+    area_id: Optional[int] = None
+    icon: Optional[str] = None
+
+
+class SubAreaOut(BaseModel):
+    id: int
+    name: str
+    area_id: int
+    icon: Optional[str]
+
+    class Config:
+        orm_mode = True
