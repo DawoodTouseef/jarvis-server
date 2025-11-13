@@ -1,86 +1,217 @@
-# Home Assistant Backend API
+# Jarvis - AI-Powered Smart Home & Assistant Platform
 
-This is a FastAPI implementation of the Home Assistant backend API for the Jarvis project.
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/fastapi-0.118.0-green)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/next.js-15.2.4-black)](https://nextjs.org/)
 
-## API Endpoints
+Jarvis is a comprehensive AI-powered smart home and assistant platform that combines advanced AI capabilities with Home Assistant integration. Built with a modern tech stack, Jarvis provides a complete solution for smart home automation, AI model management, knowledge base systems, and more.
 
-### State Management APIs
+## 🌟 Key Features
 
-- `GET /api/states` - Get all current entity states
-- `GET /api/states/{entity_id}` - Get current state of a specific entity
-- `POST /api/states/{entity_id}` - Set/update state of an entity
-- `GET /api/states/{entity_id}/history` - Get historical states for an entity
+### 🏠 Smart Home Integration
+- Full Home Assistant API implementation
+- Real-time device control and monitoring
+- Entity, device, and area/room registry management
+- Event-driven architecture with comprehensive state tracking
+- Statistics and historical data analysis
 
-### Event APIs
+### 🤖 AI Model Management
+- Multi-provider AI model support (OpenAI, Ollama, Anthropic, Google GenAI)
+- Model registry with versioning and provider management
+- Pipeline system for complex AI workflows
+- Evaluation arena for model comparison and testing
 
-- `GET /api/events` - Get recent events
-- `POST /api/events/{event_type}` - Fire a new event
+### 💬 Advanced Chat Interface
+- Real-time WebSocket communication
+- Context-aware conversations with memory persistence
+- Multi-user chat channels and group management
+- Rich message formatting and file attachments
 
-### Service Call APIs
+### 📚 Knowledge Management
+- Intelligent document retrieval and search
+- Vector database integration (ChromaDB, Qdrant, Pinecone)
+- Content extraction from multiple file formats
+- Web search integration with multiple providers
 
-- `POST /api/services/{domain}/{service}` - Call a service (e.g., turn on a light)
+### 🎵 Media & Content Processing
+- Audio transcription and text-to-speech
+- Image generation and processing
+- Video processing capabilities
+- Content analysis and tagging
 
-### Entity Registry APIs
+### 🔧 Developer Features
+- Comprehensive RESTful API with automatic documentation
+- WebSocket support for real-time updates
+- Extensible plugin architecture
+- Role-based access control and authentication
 
-- `GET /api/registry/entities` - Get all registered entities
-- `POST /api/registry/entities` - Register a new entity
-- `GET /api/registry/entities/{entity_id}` - Get entity registry entry
+## 🏗️ Architecture Overview
 
-### Device Registry APIs
+### Frontend
+- **Framework**: Next.js 15 with React 19
+- **Styling**: Tailwind CSS with Radix UI components
+- **State Management**: React Hooks and Context API
+- **Real-time**: Socket.IO client for WebSocket communication
+- **UI Components**: Custom dashboard with responsive design
 
-- `GET /api/registry/devices` - Get all registered devices
-- `POST /api/registry/devices` - Register a new device
+### Backend
+- **Framework**: FastAPI 0.118.0
+- **Database**: SQLAlchemy ORM with multiple database support
+- **Authentication**: JWT-based with OAuth and LDAP support
+- **Caching**: Redis integration
+- **AI Libraries**: LangChain, Transformers, OpenAI, Anthropic SDKs
+- **Search**: ChromaDB, Qdrant, Pinecone vector databases
 
-### Area Registry APIs
+### Database Schema
+- **Core Models**: Users, Chats, Messages, Files, Folders
+- **AI Models**: Models, Pipelines, Functions, Tools
+- **Home Assistant**: States, Events, Statistics, Entity Registry
+- **Knowledge**: Documents, Collections, Retrieval systems
+- **Media**: Audio, Images, Videos with metadata
 
-- `GET /api/registry/areas` - Get all areas/rooms
-- `POST /api/registry/areas` - Create a new area
+## 🚀 Quick Start
 
-### Statistics APIs
+### Prerequisites
+- Python 3.8+
+- Node.js 18+
+- Docker (recommended for dependencies)
+- PostgreSQL, MySQL, or SQLite database
 
-- `GET /api/statistics/{statistic_id}` - Get statistics for an entity
-- `POST /api/statistics/{statistic_id}` - Record statistics manually
+### Installation
 
-### Recorder APIs
-
-- `GET /api/recorder/info` - Get current recorder run information
-- `POST /api/recorder/purge` - Purge old data
-
-## Database Models
-
-The API uses the following database models:
-
-- `RecorderRuns` - Manages recorder sessions
-- `States` - Stores entity states
-- `Events` - Stores system events
-- `StatisticsLongTerm` - Stores long-term statistics
-- `StatisticsShortTermData` - Stores short-term statistics
-- `EntityRegistry` - Manages entity registration
-- `DeviceRegistry` - Manages device registration
-- `AreaRegistry` - Manages area/room registration
-
-## Installation
-
-1. Make sure you have Python 3.8+ installed
-2. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-## Running the Server
-
-To run the server in development mode:
+1. **Clone the repository:**
+```bash
+git clone https://github.com/your-username/jarvis.git
+cd jarvis
 ```
-uvicorn backend.main:app --reload
+
+2. **Backend setup:**
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install Python dependencies
+pip install -r requirements.txt
 ```
 
-The API documentation will be available at:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-
-## Testing
-
-To run the tests:
+3. **Frontend setup:**
+```bash
+# Install Node.js dependencies
+npm install
 ```
-pytest tests/test_homeassistant_api.py
+
+4. **Environment configuration:**
+```bash
+# Copy and configure environment variables
+cp .env.example .env
+# Edit .env with your configuration
 ```
+
+### Running the Application
+
+**Development Mode:**
+```bash
+# Start backend server
+python start.py
+
+# In a separate terminal, start frontend development server
+npm run dev
+```
+
+**Production Mode:**
+```bash
+# Build frontend
+npm run build
+
+# Start server
+python start.py
+```
+
+The application will be available at:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8080
+- API Documentation: http://localhost:8080/docs
+
+## 📖 API Documentation
+
+Jarvis provides comprehensive API documentation automatically generated by FastAPI:
+
+- **Swagger UI**: http://localhost:8080/docs
+- **ReDoc**: http://localhost:8080/redoc
+
+### Core API Modules
+
+#### Authentication
+- User registration and login
+- JWT token management
+- OAuth integration
+- Role-based access control
+
+#### Home Assistant Integration
+- State management APIs
+- Event handling and firing
+- Service call execution
+- Registry management (entities, devices, areas)
+- Statistics and recording
+
+#### AI Model Management
+- Model listing and creation
+- Provider integration (OpenAI, Ollama, Anthropic)
+- Pipeline execution and management
+- Model evaluation and comparison
+
+#### Chat System
+- Message sending and retrieval
+- Channel and group management
+- File sharing and attachments
+- Real-time updates via WebSocket
+
+#### Knowledge Base
+- Document upload and processing
+- Vector search and retrieval
+- Collection management
+- Content extraction and analysis
+
+## 🧪 Testing
+
+Run the test suite with pytest:
+```bash
+pytest tests/
+```
+
+## 🛠️ Configuration
+
+Jarvis is highly configurable through environment variables. Key configuration options include:
+
+- **Database**: Multiple database backends supported
+- **AI Providers**: OpenAI, Anthropic, Ollama, Google GenAI
+- **Vector Stores**: ChromaDB, Qdrant, Pinecone, Elasticsearch
+- **Authentication**: JWT, OAuth, LDAP
+- **File Storage**: Local, S3, Azure Blob, Google Cloud Storage
+
+## 🤝 Contributing
+
+We welcome contributions to Jarvis! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on how to get started.
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Home Assistant community for inspiration
+- FastAPI and Next.js teams for excellent frameworks
+- Open source AI libraries and tools
+- All contributors to the project
+
+## 📞 Support
+
+For support, please open an issue on GitHub or contact the development team.
