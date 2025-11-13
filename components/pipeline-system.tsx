@@ -1,115 +1,407 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Zap, Plus, Play, Pause, Trash2, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { 
+  Zap, 
+  Plus, 
+  Play, 
+  Pause, 
+  Trash2, 
+  Clock, 
+  CheckCircle2, 
+  XCircle, 
+  AlertCircle, 
+  Download, 
+  Upload, 
+  Edit,
+  FileText,
+  Eye,
+  Github,
+  EyeOff
+} from "lucide-react"
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-
-interface Pipeline {
-  id: string
-  name: string
-  description: string
-  status: "running" | "paused" | "completed" | "failed"
-  steps: number
-  lastRun: Date
-  executions: number
-  successRate: number
-}
+import { apiClient, type Pipeline } from "@/lib/api"
+import { toast } from "@/hooks/use-toast"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export function PipelineSystem() {
-  const [pipelines, setPipelines] = useState<Pipeline[]>([
-    {
-      id: "1",
-      name: "Daily Report Generation",
-      description: "Generates and emails daily analytics reports",
-      status: "running",
-      steps: 5,
-      lastRun: new Date(),
-      executions: 234,
-      successRate: 98.5,
-    },
-    {
-      id: "2",
-      name: "Content Moderation",
-      description: "Automatically moderates user-generated content",
-      status: "running",
-      steps: 3,
-      lastRun: new Date(Date.now() - 3600000),
-      executions: 1456,
-      successRate: 99.2,
-    },
-    {
-      id: "3",
-      name: "Data Backup",
-      description: "Backs up database to cloud storage",
-      status: "completed",
-      steps: 4,
-      lastRun: new Date(Date.now() - 7200000),
-      executions: 89,
-      successRate: 100,
-    },
-    {
-      id: "4",
-      name: "Image Processing",
-      description: "Processes and optimizes uploaded images",
-      status: "paused",
-      steps: 6,
-      lastRun: new Date(Date.now() - 86400000),
-      executions: 567,
-      successRate: 97.8,
-    },
-  ])
-
+  const [pipelines, setPipelines] = useState<any[]>([])
+  const [models, setModels] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingPipeline, setEditingPipeline] = useState<Pipeline | null>(null)
+  const [newPipeline, setNewPipeline] = useState({
+    name: "",
+    description: "",
+    url: "",
+  })
+  const [manualUrl, setManualUrl] = useState("")
+  const [selectedFile, setSelectedFile] = useState<File[]>([])
+  const [PIPELINE_LIST, setPIPELINE_LIST] = useState<any[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [pipelineValue, setPipelineValue] = useState<any>(null)
+  const [pipelineSpecs, setPipelineSpecs] = useState<any>(null)
+  const [showValves, setShowValves] = useState<boolean>(false)
+  const [showSpecs, setShowSpecs] = useState<boolean>(false)
+  
+  useEffect(() => {
+    fetchPipelines()
+    fetchPipelinesList()
+    
+  }, [])
 
-  const togglePipelineStatus = (id: string) => {
-    setPipelines((prev) =>
-      prev.map((pipeline) =>
-        pipeline.id === id
-          ? {
-              ...pipeline,
-              status: pipeline.status === "running" ? "paused" : "running",
+  const fetchValue = async (id: string) => {
+    try {
+      const response = await apiClient.getPipelineValves(id)
+      
+      if (response.success && response.data) {
+        setShowValves(!showValves)
+        setPipelineValue(response.data)
+        
+      }
+      else if (!response.success)
+      {
+        toast({
+          title: "Error",
+          description: typeof response.error === 'string' ? response.error : JSON.stringify(response.error) || "Failed to fetch pipeline valves",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast(
+        {
+          title:"Error",
+          description:`${error}`,
+          variant:"destructive"
+        }
+      )
+    }
+  }
+  
+  const fetchPipelines = async () => {
+    try {
+      const response = await apiClient.getPipelinesList()
+      if (response.success && response.data) {
+        setLoading(false)
+        // Transform the pipeline data to match our frontend interface
+        const transformedPipelines = Array.isArray(response.data) 
+          ? response.data.map((pipeline: any) => ({ ...pipeline })) 
+          : []
+        setPipelines(transformedPipelines)
+        
+        // Fetch models for each pipeline
+        transformedPipelines.forEach((pipeline: any) => fetchModels(pipeline.id))
+      }
+    } catch (error) {
+      console.error("Failed to fetch pipelines", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch pipelines",
+        variant: "destructive",
+      })
+    }
+  }
+  
+  const fetchModels = async (id: string) => {
+    try {
+      // Get the pipeline list to find the urlIdx for this pipeline
+      const listResponse = await apiClient.getPipelinesList();
+      if (listResponse.success && listResponse.data && listResponse.data.data) {
+        const pipelineList = listResponse.data.data;
+        // Find the urlIdx for the pipeline with the given id
+        const pipelineInfo = pipelineList.find((p: any) => p.id === id);
+        
+        // Only fetch pipeline data if we have a valid urlIdx
+        if (pipelineInfo && pipelineInfo.idx !== undefined) {
+          const response = await apiClient.getPipelineById(id, pipelineInfo.idx);
+          if (response.success && response.data) {
+            console.log("Pipeline Data:", response.data);
+            // The response data should contain the pipeline models directly
+            if (Array.isArray(response.data)) {
+              setModels(response.data.data);
+              
+            } else if (response.data && typeof response.data === 'object') {
+              // If it's a single object, wrap it in an array
+              setModels([response.data.data]);
             }
-          : pipeline,
-      ),
+          }
+        }
+      }
+    } catch (error) {
+      toast(
+        {
+          title:"Error",
+          description:"Failed to fetch models",
+          variant:"destructive"
+        }
+      )
+    }
+  };
+  
+  const fetchPipelinesList = async () => {
+    try {
+      const response = await apiClient.getPipelinesList()
+      if (response.success && response.data) {
+        setPIPELINE_LIST(response.data.data || [])
+      }
+    } catch (error) {
+      toast(
+        {
+          title:"Error",
+          description:"Failed to fetch models",
+          variant:"destructive"
+        }
+      )
+    }
+  }
+
+  const deletePipeline = async (id: string, urlIdx: number) => {
+    try {
+
+      const response = await apiClient.deletePipeline(id, urlIdx)
+      if (response.success) {
+        setModels((prev) => prev.filter((model) => model.id !== id))
+        toast({
+          title: "Success",
+          description: "Pipeline deleted successfully",
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: typeof response.error === 'object' ? JSON.stringify(response.error) : response.error || "Failed to delete pipeline",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete pipeline: " + (error instanceof Error ? error.message : typeof error === 'object' ? JSON.stringify(error) : "Unknown error"),
+        variant: "destructive",
+      })
+    }
+  }
+
+  const createPipeline = async () => {
+    try {
+      // Use either the selected URL or the manually entered URL
+      const pipelineUrl = newPipeline.url || manualUrl;
+      
+      if (!pipelineUrl && selectedFile.length === 0) {
+        toast({
+          title: "Error",
+          description: "Please select a pipeline URL, enter a GitHub URL, or upload a file",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Find the urlIdx for the selected pipeline
+      const selectedPipeline = PIPELINE_LIST.find((p: any) => p.url === pipelineUrl);
+      const urlIdx = selectedPipeline ? selectedPipeline.idx : 0;
+      
+      let response;
+      
+      if (selectedFile && selectedFile.length > 0) {
+
+        const file = selectedFile[0]; // Get the first file
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('urlIdx', urlIdx.toString())
+        
+        response = await apiClient.createPipelineByFile(formData, urlIdx)
+      } else if (pipelineUrl) {
+        response = await apiClient.createPipelineByUrl(pipelineUrl, urlIdx)
+      } else {
+        toast({
+          title: "Error",
+          description: "Please provide either a file or a URL",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      
+      if (response.success && response.data) {
+        // Transform backend data to match frontend interface
+        const transformedPipeline = {
+          ...response.data,
+        }
+        
+        setPipelines((prev) => [...prev, transformedPipeline])
+        console.log(response.data)
+        fetchModels(response.data.id)
+        
+        setIsCreateDialogOpen(false)
+        setNewPipeline({
+          name: "",
+          description: "",
+          url: "",
+        })
+        setManualUrl("")
+        setSelectedFile([])
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ""
+        }
+        toast({
+          title: "Success",
+          description: "Pipeline created successfully",
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: typeof response.error === 'object' ? JSON.stringify(response.error) : response.error || "Failed to create pipeline",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create pipeline: " + (error instanceof Error ? error.message : typeof error === 'object' ? JSON.stringify(error) : "Unknown error"),
+        variant: "destructive",
+      })
+    }
+  }
+
+  const updatePipeline = async () => {
+    if (!editingPipeline) return
+    
+    try {
+      const response = await apiClient.updatePipeline(editingPipeline.id, editingPipeline)
+      if (response.success && response.data) {
+        setPipelines((prev) => 
+          prev.map((pipeline) => 
+            pipeline.id === editingPipeline.id ? {...response.data, ...pipeline} : pipeline
+          )
+        )
+        // Update the model as well
+        setModels((prev) => 
+          prev.map((model) => 
+            model.id === editingPipeline.id ? {...response.data, ...model} : model
+          )
+        )
+        setIsEditDialogOpen(false)
+        setEditingPipeline(null)
+        toast({
+          title: "Success",
+          description: "Pipeline updated successfully",
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: response.error.msg || "Failed to update pipeline",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update pipeline: " + (error instanceof Error ? error.message : typeof error === 'object' ? JSON.stringify(error) : "Unknown error"),
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (files && files.length > 0) {
+      setSelectedFile(Array.from(files))
+    }
+  }
+
+  const handleEditPipeline = async (pipeline: Pipeline) => {
+    setEditingPipeline(pipeline);
+    // Reset valves display state
+    setShowValves(false);
+    setPipelineValue(null);
+    // Fetch valves configuration when editing
+    try {
+      const response = await apiClient.getPipelineValves(pipeline.id);
+      if (response.success && response.data) {
+        setPipelineValue(response.data);
+        setShowValves(true);
+      }
+    } catch (error) {
+      toast(
+        {
+          title:"Error",
+          description:`${error}`,
+          variant:"destructive"
+        }
+      )
+    }
+    setIsEditDialogOpen(true);
+  }
+  const modelGrid = (models: any) => {
+    return (
+      <>
+      {models.map((model: any) => (
+        <Card key={model.id} className="glass border-primary/20 p-6 hover:border-primary/40 transition-all group">
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3 flex-1">
+              <div className="p-3 glass rounded-lg border border-primary/30 group-hover:border-primary/50 transition-all">
+                <Zap className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+<h3 className="font-semibold text-lg mb-1">
+  {model.id.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}
+</h3>
+                <p className="text-sm text-muted-foreground">{model.name}</p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="glass border-accent/30 text-accent hover:bg-accent/10 bg-transparent"
+                onClick={() => handleEditPipeline({ ...model })}
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="glass border-destructive/30 text-destructive hover:bg-destructive/10 bg-transparent"
+                onClick={() => deletePipeline(model.id, 1)}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+        
+        ))}
+      </>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
     )
   }
-
-  const deletePipeline = (id: string) => {
-    setPipelines((prev) => prev.filter((pipeline) => pipeline.id !== id))
-  }
-
-  const getStatusIcon = (status: Pipeline["status"]) => {
-    switch (status) {
-      case "running":
-        return <Play className="w-4 h-4" />
-      case "paused":
-        return <Pause className="w-4 h-4" />
-      case "completed":
-        return <CheckCircle2 className="w-4 h-4" />
-      case "failed":
-        return <XCircle className="w-4 h-4" />
-    }
-  }
-
-  const getStatusColor = (status: Pipeline["status"]) => {
-    switch (status) {
-      case "running":
-        return "bg-primary/20 text-primary border-primary/30"
-      case "paused":
-        return "bg-secondary/20 text-secondary border-secondary/30"
-      case "completed":
-        return "bg-accent/20 text-accent border-accent/30"
-      case "failed":
-        return "bg-destructive/20 text-destructive border-destructive/30"
-    }
-  }
-
+  
+  
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -125,28 +417,102 @@ export function PipelineSystem() {
               Create Pipeline
             </Button>
           </DialogTrigger>
-          <DialogContent className="glass-strong border-primary/20">
+          <DialogContent className="glass-strong border-primary/20 max-w-2xl">
             <DialogHeader>
               <DialogTitle className="neon-text">Create New Pipeline</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 pt-4">
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>Pipeline Name</Label>
-                <Input placeholder="My Automation Pipeline" className="glass border-primary/20" />
+                <Label>Select Pipeline Url</Label>
+                <Select value={newPipeline.url} onValueChange={(value) => setNewPipeline({...newPipeline, url: value})} >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Pipeline Url" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    
+                    {PIPELINE_LIST && PIPELINE_LIST.map((pipeline: any) => (
+                      <SelectItem key={pipeline.idx} value={pipeline.url}>
+                        {pipeline.url}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea
-                  placeholder="Describe what this pipeline does..."
-                  className="glass border-primary/20"
-                  rows={3}
-                />
+                <Label>Upload Pipeline File</Label>
+                <div className="flex flex-row items-center gap-2">
+                  <div className="flex-1">
+                    <Input 
+                      ref={fileInputRef}
+                      placeholder="Upload Python file" 
+                      className="glass border-primary/20" 
+                      type="file" 
+                      accept=".py"
+                      id="pipeline-input-file"
+                      onChange={handleFileChange}
+                      hidden
+                      
+                    />
+                    <Button 
+                      className="text-neon-glow w-full text-sm font-medium py-2 bg-transparent hover:bg-transparent-100 border border-dashed dark:border-gray-850 dark:hover:bg-gray-850 text-center rounded-xl"
+                      onClick={() => {
+                        document.getElementById("pipeline-input-file")?.click()
+                      }}
+                    >
+                      {selectedFile && selectedFile.length > 0 ? (
+                        <>
+                          {selectedFile.length} pipeline(s) selected.
+                        </>
+                      ) : (
+                        <>
+                          Click here to select a py file.
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <Button 
+                    className="neon-glow" 
+                    disabled={!selectedFile || selectedFile.length === 0} 
+                    onClick={() => {
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = "";
+                        setSelectedFile([]);
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4"/>
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
-                <Label>Trigger</Label>
-                <Input placeholder="Schedule or event trigger" className="glass border-primary/20" />
+                <Label>Install from GitHub URL</Label>
+                <div className="flex flex-row items-center gap-2">
+                  <div className="flex-1">
+                    <Input 
+                      placeholder="https://raw.githubusercontent.com/..." 
+                      className="glass border-primary/20" 
+                      value={manualUrl}
+                      onChange={(e) => setManualUrl(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Enter raw GitHub URL for pipeline file
+                    </p>
+                  </div>
+                  <Button 
+                    className="neon-glow" 
+                    onClick={() => setNewPipeline({...newPipeline, url: manualUrl})}
+                    disabled={!manualUrl}
+                  >
+                    <Download className="w-4 h-4"/>
+                  </Button>
+                </div>
               </div>
-              <Button className="w-full neon-glow" onClick={() => setIsCreateDialogOpen(false)}>
+            
+              <Button 
+                className="w-full neon-glow" 
+                onClick={createPipeline}
+                disabled={!newPipeline.url && !manualUrl && (!selectedFile || selectedFile.length === 0)}
+              >
                 Create Pipeline
               </Button>
             </div>
@@ -160,16 +526,16 @@ export function PipelineSystem() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total Pipelines</p>
-              <p className="text-3xl font-bold mt-1">{pipelines.length}</p>
+              <p className="text-3xl font-bold mt-1">{models.length}</p>
             </div>
             <Zap className="w-8 h-8 text-primary" />
           </div>
         </Card>
         <Card className="glass border-primary/20 p-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between"> 
             <div>
               <p className="text-sm text-muted-foreground">Running</p>
-              <p className="text-3xl font-bold mt-1">{pipelines.filter((p) => p.status === "running").length}</p>
+              <p className="text-3xl font-bold mt-1">{models.filter((p) => p.status === "running").length}</p>
             </div>
             <Play className="w-8 h-8 text-primary" />
           </div>
@@ -178,7 +544,7 @@ export function PipelineSystem() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total Executions</p>
-              <p className="text-3xl font-bold mt-1">{pipelines.reduce((acc, p) => acc + p.executions, 0)}</p>
+              <p className="text-3xl font-bold mt-1">{models.reduce((acc, p) => acc + (p.executions || 0), 0)}</p>
             </div>
             <CheckCircle2 className="w-8 h-8 text-accent" />
           </div>
@@ -188,7 +554,9 @@ export function PipelineSystem() {
             <div>
               <p className="text-sm text-muted-foreground">Avg Success Rate</p>
               <p className="text-3xl font-bold mt-1">
-                {(pipelines.reduce((acc, p) => acc + p.successRate, 0) / pipelines.length).toFixed(1)}%
+                {pipelines.length > 0 
+                  ? ((models.reduce((acc, p) => acc + (p.successRate || 0), 0) / (pipelines.length || 1))).toFixed(1)
+                  : "0.0"}%
               </p>
             </div>
             <AlertCircle className="w-8 h-8 text-secondary" />
@@ -198,128 +566,75 @@ export function PipelineSystem() {
 
       {/* Pipelines Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {pipelines.map((pipeline) => (
-          <Card key={pipeline.id} className="glass border-primary/20 p-6 hover:border-primary/40 transition-all group">
-            <div className="space-y-4">
-              {/* Header */}
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3 flex-1">
-                  <div className="p-3 glass rounded-lg border border-primary/30 group-hover:border-primary/50 transition-all">
-                    <Zap className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-lg mb-1">{pipeline.name}</h3>
-                    <p className="text-sm text-muted-foreground">{pipeline.description}</p>
-                  </div>
-                </div>
-                <Badge className={getStatusColor(pipeline.status)}>
-                  <span className="flex items-center gap-1">
-                    {getStatusIcon(pipeline.status)}
-                    {pipeline.status}
-                  </span>
-                </Badge>
-              </div>
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 py-4 border-y border-border/50">
-                <div>
-                  <p className="text-xs text-muted-foreground">Steps</p>
-                  <p className="text-sm font-medium mt-1">{pipeline.steps}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Executions</p>
-                  <p className="text-sm font-medium mt-1">{pipeline.executions}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Success Rate</p>
-                  <p className="text-sm font-medium mt-1">{pipeline.successRate}%</p>
-                </div>
-              </div>
-
-              {/* Last Run */}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Clock className="w-4 h-4" />
-                <span>
-                  Last run:{" "}
-                  {pipeline.lastRun.toLocaleString([], {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex-1 glass border-primary/30 bg-transparent"
-                  onClick={() => togglePipelineStatus(pipeline.id)}
-                >
-                  {pipeline.status === "running" ? (
-                    <>
-                      <Pause className="w-4 h-4 mr-2" />
-                      Pause
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 mr-2" />
-                      Start
-                    </>
-                  )}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="glass border-destructive/30 text-destructive hover:bg-destructive/10 bg-transparent"
-                  onClick={() => deletePipeline(pipeline.id)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </Card>
-        ))}
+        {models.map((model) => modelGrid(model))}
       </div>
 
-      {/* Recent Executions */}
-      <Card className="glass border-primary/20 p-6">
-        <h2 className="text-xl font-semibold mb-4">Recent Executions</h2>
-        <div className="space-y-3">
-          {[
-            { pipeline: "Daily Report Generation", status: "completed", time: "2 min ago", duration: "1.2s" },
-            { pipeline: "Content Moderation", status: "completed", time: "5 min ago", duration: "0.8s" },
-            { pipeline: "Image Processing", status: "failed", time: "15 min ago", duration: "3.4s" },
-            { pipeline: "Data Backup", status: "completed", time: "2 hours ago", duration: "45.2s" },
-          ].map((execution, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between p-3 glass rounded-lg border border-primary/10"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-2 h-2 rounded-full ${execution.status === "completed" ? "bg-accent" : "bg-destructive"}`}
-                />
-                <div>
-                  <p className="text-sm font-medium">{execution.pipeline}</p>
-                  <p className="text-xs text-muted-foreground">{execution.time}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <Badge
-                  variant={execution.status === "completed" ? "default" : "destructive"}
-                  className={execution.status === "completed" ? "bg-accent/20 text-accent border-accent/30" : ""}
-                >
-                  {execution.status}
-                </Badge>
-                <p className="text-xs text-muted-foreground mt-1">{execution.duration}</p>
+      {/* Edit Pipeline Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="glass-strong border-primary/20 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="neon-text">Edit Pipeline</DialogTitle>
+          </DialogHeader>
+          {editingPipeline && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Valves Configuration</Label>
+                <Button onClick={() =>{ 
+                  fetchValue(editingPipeline.name) 
+                  
+                }}>
+                  {showValves ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </Button>
+                {pipelineValue && showValves && (
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      {JSON.stringify(pipelineValue, null, 2)}
+                      <Button 
+                        className="mt-2"
+                        onClick={async () => {
+                          if (editingPipeline) {
+                            try {
+                              const response = await apiClient.updatePipelineValves(editingPipeline.id, pipelineValue);
+                              if (response.success) {
+                                toast({
+                                  title: "Success",
+                                  description: "Valves configuration updated successfully",
+                                });
+                              } else {
+                                toast({
+                                  title: "Error",
+                                  description: typeof response.error === 'object' ? JSON.stringify(response.error) : response.error || "Failed to update valves configuration",
+                                  variant: "destructive",
+                                });
+                              }
+                            } catch (error) {
+                              toast({
+                                title: "Error",
+                                description: "Failed to update valves configuration",
+                                variant: "destructive",
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        Save Valves
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          ))}
-        </div>
-      </Card>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="neon-glow" onClick={updatePipeline}>
+              Update Pipeline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

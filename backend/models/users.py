@@ -148,7 +148,9 @@ class UserUpdateForm(BaseModel):
     email: str
     profile_image_url: str
     password: Optional[str] = None
-
+    gender: Optional[str] = None
+    date_of_birth: Optional[datetime.date] = None
+    bio: Optional[str] = None
 
 class UsersTable:
     def insert_new_user(

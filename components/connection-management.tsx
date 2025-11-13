@@ -30,7 +30,7 @@ interface ConnectionDetails {
   apiKey: string;
   authType: string;
   prefixId: string;
-  providerType: string;
+  providerType: 'openai' | 'azure';
   modelIds: string[];
   tags: string[];
 }
@@ -170,12 +170,12 @@ export function ConnectionManagement() {
   const handleAddConnection = () => {
     setEditingIndex(null);
     setNewConnection({
-      type: 'openai',
+      type: 'external',
       baseUrl: '',
       apiKey: '',
       authType: 'bearer',
       prefixId: '',
-      providerType: 'external',
+      providerType: 'openai',
       modelIds: [],
       tags: [],
     });
@@ -259,7 +259,7 @@ export function ConnectionManagement() {
         apiKey: config.OPENAI_API_KEYS[index] || '',
         authType: configEntry.auth_type || 'bearer',
         prefixId: configEntry.prefix_id || '',
-        providerType: configEntry.connection_type || 'external',
+        providerType: configEntry.connection_type || 'openai',
         modelIds: configEntry.model_ids || [],
         tags: configEntry.tags || [],
       });
@@ -271,7 +271,7 @@ export function ConnectionManagement() {
         apiKey: '', // Ollama typically doesn't require API key
         authType: configEntry.auth_type || 'none',
         prefixId: configEntry.prefix_id || '',
-        providerType: configEntry.connection_type || 'local',
+        providerType: configEntry.connection_type || 'azure',
         modelIds: configEntry.model_ids || [],
         tags: configEntry.tags || [],
       });
@@ -424,7 +424,15 @@ export function ConnectionManagement() {
       });
     }
   };
-
+  const handleConnectionType = async (connection_type: string) => {
+    if(connection_type==="external") {
+      setNewConnection({...newConnection, type:  'local'});
+    }
+    if(connection_type==="local") {
+      setNewConnection({...newConnection, type:  'external'});
+    }
+    
+  };
   if (loading) {
     return <div>Loading configurations...</div>;
   }
@@ -658,25 +666,22 @@ export function ConnectionManagement() {
           </DialogHeader>
           <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
             <div className="space-y-2">
-              <Label>Connection Type *</Label>
-              <Select 
-                value={newConnection.type} 
-                onValueChange={(value) => setNewConnection({...newConnection, type: value as 'openai' | 'ollama'})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select connection type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openai">OpenAI Compatible</SelectItem>
-                  <SelectItem value="ollama">Ollama</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-right justify-between">
+                <Label>Connection Type *</Label>
+                <Button onClick={(e)=>{handleConnectionType(newConnection.type)}}
+                  style={{ backgroundColor: "transparent", border: "none" ,color:"white"}}
+                  >{newConnection.type}
+
+                  
+                </Button>
+              </div>
+              
             </div>
             
             <div className="space-y-2">
               <Label>Base URL *</Label>
               <Input
-                placeholder={newConnection.type === 'openai' 
+                placeholder={newConnection.type === 'external' 
                   ? "https://api.openai.com/v1" 
                   : "http://localhost:11434"}
                 value={newConnection.baseUrl}
@@ -684,7 +689,7 @@ export function ConnectionManagement() {
               />
             </div>
             
-            {newConnection.type === 'openai' && (
+            {newConnection.type === 'external' && (
               <div className="space-y-2">
                 <Label>Auth Type *</Label>
                 <div className="flex space-x-2 items-center">
@@ -726,18 +731,18 @@ export function ConnectionManagement() {
               />
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-2 flex flex-row">
               <Label>Provider Type *</Label>
               <Select 
                 value={newConnection.providerType} 
-                onValueChange={(value) => setNewConnection({...newConnection, providerType: value})}
+                onValueChange={(value) => setNewConnection({...newConnection, providerType: value as 'openai' | 'azure'})}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select provider type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="external">External</SelectItem>
-                  <SelectItem value="local">Local</SelectItem>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="azure">Azure OpenAI</SelectItem>
                 </SelectContent>
               </Select>
             </div>

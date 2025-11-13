@@ -479,6 +479,19 @@ export interface SignupResponse {
   permissions: string[];
 }
 
+// Pipeline Interfaces
+export interface Pipeline {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  pipelines: string[];
+  priority: number;
+  valves: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
 export default class ApiClient {
   private baseUrl: string
   private token: string | null = null
@@ -734,6 +747,14 @@ export default class ApiClient {
   async getSessionUser(): Promise<ApiResponse<User>> {
     return this.request<User>("/api/v1/auths/", {
       method: "GET",
+    })
+  }
+
+  // Update user profile
+  async updateProfile(profileData: any): Promise<ApiResponse<any>> {
+    return this.request<any>("/api/v1/auths/update/profile", {
+      method: "POST",
+      body: JSON.stringify(profileData),
     })
   }
 
@@ -1682,6 +1703,147 @@ export default class ApiClient {
       method: "DELETE",
     })
   }
+
+  async getPipelinesList(): Promise<ApiResponse<any>> {
+    return this.request<any>("/api/v1/pipelines/list");
+  }
+  async getPipelineById(id: string, urlIdx?: number): Promise<ApiResponse<Pipeline>> {
+    const url = urlIdx !== undefined 
+      ? `/api/v1/pipelines/?urlIdx=${urlIdx}` 
+      : `/api/v1/pipelines/${id}`;
+    return this.request<any>(url, {
+      method: "GET",
+    });
+  }
+
+  async createPipelineByFile(formData: FormData, urlIdx: number): Promise<ApiResponse<Pipeline>> {
+    try {
+      const url = `${this.baseUrl}/api/v1/pipelines/upload`;
+      
+      const headers: HeadersInit = {};
+      if (this.token) { 
+        headers.Authorization = `Bearer ${this.token}`;
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: headers
+      });
+
+      let data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        // Handle non-JSON responses
+        const text = await response.text();
+        data = { message: text };
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.message || data.detail || data.error || `HTTP ${response.status}: ${response.statusText}`
+        };
+      }
+
+      return {
+        success: true,
+        data
+      };
+    } catch (error) {
+      console.error("Error creating pipeline by file:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to create pipeline from file"
+      };
+    }
+  }
+
+  async createPipelineByUrl(url: string, urlIdx: number): Promise<ApiResponse<Pipeline>> {
+    try {
+      // Validate URL format
+      if (!url || !url.startsWith('http')) {
+        return {
+          success: false,
+          error: "Invalid URL provided"
+        };
+      }
+      
+      return this.request<Pipeline>("/api/v1/pipelines/add", {
+        method: "POST",
+        body: JSON.stringify({
+          url: url,
+          urlIdx: urlIdx
+        }),
+      });
+    } catch (error) {
+      console.error("Error creating pipeline from URL:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to create pipeline from URL"
+      };
+    }
+  }
+
+  async updatePipeline(id: string, pipelineData: Partial<Omit<Pipeline, 'id' | 'created_at' | 'updated_at'>>, urlIdx?: number): Promise<ApiResponse<Pipeline>> {
+    // If urlIdx is not provided, try to get it from the pipeline list
+    let actualUrlIdx = urlIdx;
+    if (actualUrlIdx === undefined) {
+      const listResponse = await this.getPipelinesList();
+      if (listResponse.success && listResponse.data && listResponse.data.data) {
+        const pipelineList = listResponse.data.data;
+        const pipelineInfo = pipelineList.find((p: any) => p.id === id);
+        actualUrlIdx = pipelineInfo ? pipelineInfo.idx : 0;
+      }
+    }
+    
+    // Use the backend update endpoint
+    const url = actualUrlIdx !== undefined 
+      ? `/api/v1/pipelines/${id}?urlIdx=${actualUrlIdx}` 
+      : `/api/v1/pipelines/${id}`;
+    return this.request<Pipeline>(url, {
+      method: "POST",
+      body: JSON.stringify(pipelineData),
+    });
+  }
+
+  async deletePipeline(id: string, urlIdx?: number): Promise<ApiResponse<boolean>> {
+    // If urlIdx is not provided, try to get it from the pipeline list
+    let actualUrlIdx = urlIdx;
+    if (actualUrlIdx === undefined) {
+      const listResponse = await this.getPipelinesList();
+      if (listResponse.success && listResponse.data && listResponse.data.data) {
+        const pipelineList = listResponse.data.data;
+        const pipelineInfo = pipelineList.find((p: any) => p.id === id);
+        actualUrlIdx = pipelineInfo ? pipelineInfo.idx : 0;
+      }
+    }
+    
+    // Use the delete endpoint with proper form data
+    return this.request<boolean>("/api/v1/pipelines/delete", {
+      method: "DELETE",
+      body: JSON.stringify({
+        id: id,
+        urlIdx: actualUrlIdx
+      }),
+    });
+  }
+
+  async getPipelineValves(id: string): Promise<ApiResponse<Record<string, any>>> {
+    return this.request<Record<string, any>>(`/api/v1/pipelines/${id}/valves`, {
+      method: "GET",
+    });
+  }
+
+  async updatePipelineValves(id: string, valvesData: Record<string, any>): Promise<ApiResponse<Record<string, any>>> {
+    return this.request<Record<string, any>>(`/api/v1/pipelines/${id}/valves`, {
+      method: "POST",
+      body: JSON.stringify(valvesData),
+    });
+  }
+  
 }
 
 export const apiClient = new ApiClient()

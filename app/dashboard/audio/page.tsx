@@ -3,7 +3,7 @@
 import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card } from "@/components/ui/card"
-import { Mic, AudioLines, Play, Square, Upload, Download, Settings } from "lucide-react"
+import { Mic, AudioLines, Play, Square, Upload, Download, Settings ,Copy} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,6 +22,8 @@ export default function AudioPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [copySuccess, setCopySuccess] = useState('')
+  const [isCopied, setIsCopied] = useState(false)
 
   // Load audio configuration on component mount
   useEffect(() => {
@@ -43,7 +45,21 @@ export default function AudioPage() {
     
     fetchAudioConfig()
   }, [])
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopySuccess('Copied!');
+      toast({
+        title: "Copied",
+        description: "Transcript copied to clipboard",
+        variant: "default"
 
+      })
+      setTimeout(() => setCopySuccess(''), 2000); // Reset message after 2 seconds
+    } catch (err) {
+      setCopySuccess('Failed to copy!');
+    }
+  };
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -185,10 +201,8 @@ export default function AudioPage() {
     try {
       setIsProcessing(true)
       const response = await apiClient.textToSpeech(textToSpeech)
-      console.log("Text-to-speech response:", response.data)
       if (response.success && response.data) {
-        console.log(response.data.message)
-        console.log(typeof response.data.message)
+        // Create a URL for the audio blob
         const audioUrl = URL.createObjectURL(response.data)
         
         // Play the audio
@@ -225,6 +239,54 @@ export default function AudioPage() {
       audioRef.current.currentTime = 0
     }
     setIsPlaying(false)
+  }
+
+  const downloadTextToSpeech = async () => {
+    if (!textToSpeech.trim()) {
+      toast({
+        title: "Warning",
+        description: "Please enter some text to convert to speech",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    try {
+      setIsProcessing(true)
+      const response = await apiClient.textToSpeech(textToSpeech)
+      if (response.success && response.data) {
+        // Create a URL for the audio blob
+        const audioBlob = response.data as Blob
+        const audioUrl = URL.createObjectURL(audioBlob)
+        
+        // Create a temporary link to trigger download
+        const link = document.createElement('a')
+        link.href = audioUrl
+        link.download = 'text-to-speech.wav' // You can customize the filename
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        // Clean up the URL object
+        URL.revokeObjectURL(audioUrl)
+        
+        toast({
+          title: "Downloaded",
+          description: "Audio file downloaded successfully"
+        })
+      } else {
+        throw new Error(response.error || "Failed to generate speech")
+      }
+    } catch (error) {
+      console.error("Error downloading text-to-speech:", error)
+      toast({
+        title: "Error",
+        description: "Failed to download audio file",
+        variant: "destructive"
+      })
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -314,17 +376,22 @@ export default function AudioPage() {
                 
                 <div className="space-y-2">
                   <Label>Transcript</Label>
-                  <Textarea 
+                  <div className="flex flex-row">
+                    <Textarea 
                     value={transcript} 
                     onChange={(e) => setTranscript(e.target.value)}
                     placeholder="Your speech will appear here..."
                     className="min-h-[120px]"
+                    readOnly
                   />
+                  <Button variant="outline" size="sm" onClick={() => copyToClipboard(transcript)}>
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                  </div>
                 </div>
                 
                 <div className="flex items-center gap-2">
                   <Upload className="w-4 h-4" />
-                  <Label>Upload Audio File</Label>
                   <Input 
                     type="file" 
                     accept="audio/*" 
@@ -332,10 +399,16 @@ export default function AudioPage() {
                     className="hidden" 
                     id="audio-upload"
                     disabled={isProcessing}
+                    hidden
+                    
                   />
                   <Label htmlFor="audio-upload">
-                    <Button variant="outline" className="cursor-pointer" disabled={isProcessing}>
-                      Choose File
+                    <Button variant="outline" className="cursor-pointer" disabled={isProcessing}
+                    onClick={()=>{
+                      document.getElementById('audio-upload').click()
+                    }}
+                    >
+                      Upload Audio File 
                     </Button>
                   </Label>
                 </div>
@@ -381,7 +454,7 @@ export default function AudioPage() {
                 
                 <div className="flex items-center gap-2">
                   <Download className="w-4 h-4" />
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={downloadTextToSpeech} disabled={isProcessing}>
                     Download Audio
                   </Button>
                 </div>

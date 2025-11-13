@@ -10,8 +10,8 @@ import { LocationTracker } from "@/components/location-tracker"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Virtual Assistant AI",
-  description: "Futuristic AI Dashboard & Control Center",
+  title: "J.A.R.V.I.S. ",
+  description: "Futuristic J.A.R.V.I.S. Dashboard & Control Center",
   generator: "v0.app",
 }
 

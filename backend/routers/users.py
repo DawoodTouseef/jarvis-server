@@ -483,10 +483,13 @@ async def update_user_by_id(
                 "name": form_data.name,
                 "email": form_data.email.lower(),
                 "profile_image_url": form_data.profile_image_url,
+                "gender": form_data.gender,
+                "date_of_birth": form_data.date_of_birth,
             },
         )
 
         if updated_user:
+            print(updated_user.gender)
             return updated_user
 
         raise HTTPException(

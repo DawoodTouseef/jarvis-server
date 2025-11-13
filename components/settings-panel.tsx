@@ -109,6 +109,7 @@ const IconMap: Record<string, React.ComponentType<any>> = {
 
 export function SettingsPanel() {
   const [user, setUser] = useState<User>({} as User)
+  const [originalUser, setOriginalUser] = useState<User>({} as User)
   const [audioconfig, setAudioConfig] = useState<AudioConfig>({
     stt: {
       ENGINE: "whisper"
@@ -167,6 +168,10 @@ export function SettingsPanel() {
           const response = await apiClient.getSessionUser();
           if (response.data) {
             setUser(prevUser => ({
+              ...prevUser,
+              ...response.data
+            }));
+            setOriginalUser(prevUser => ({
               ...prevUser,
               ...response.data
             }));
@@ -294,6 +299,66 @@ export function SettingsPanel() {
       })
     }
   }
+
+  // Function to check if user data has been modified
+  const isUserDataModified = () => {
+    return (
+      user.name !== originalUser.name ||
+      user.bio !== originalUser.bio ||
+      user.gender !== originalUser.gender ||
+      user.date_of_birth !== originalUser.date_of_birth ||
+      user.profile_image_url !== originalUser.profile_image_url
+    );
+  };
+
+  // Function to update user profile
+  const handleUpdateProfile = async () => {
+    try {
+      // Prepare the profile update data according to the UpdateProfileForm model
+      const profileData = {
+        profile_image_url: user.profile_image_url || "",
+        name: user.name || "",
+        bio: user.bio || null,
+        gender: user.gender || null,
+        date_of_birth: user.date_of_birth || null
+      };
+
+      // Call the API to update profile
+      const response = await apiClient.updateProfile(profileData);
+
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Profile updated successfully"
+        });
+        // Update original user data to reflect changes
+        setOriginalUser({ ...user });
+      } else {
+        // Ensure we're not trying to render an object as a React child
+        const errorMessage = typeof response.error === 'string' 
+          ? response.error 
+          : "Failed to update profile";
+        
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      // Ensure we're not trying to render an object as a React child
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Failed to update profile";
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    }
+  };
 
   // Add a new floor
   const handleAddFloor = async () => {
@@ -721,7 +786,7 @@ export function SettingsPanel() {
               {/* Avatar */}
               <div className="flex items-center gap-6">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-3xl font-bold">
-                  <img src={user.profile_image_url}/>
+                  <img src={user.profile_image_url || "/user.png"} alt="Profile" onError={(e) => { e.currentTarget.src = "/user.png"; }} />
                 </div>
                 <div className="space-y-2">
                   <Label>Profile Picture</Label>
@@ -737,8 +802,8 @@ export function SettingsPanel() {
                 <Label htmlFor="name">Full Name</Label>
                 <Input
                   id="name"
-                  value={user.name}
-                  onChange={(e) => setSettings({ ...settings, name: e.target.value })}
+                  value={user.name || ""}
+                  onChange={(e) => setUser({ ...user, name: e.target.value })}
                   className="glass border-primary/20"
                 />
               </div>
@@ -749,8 +814,8 @@ export function SettingsPanel() {
                 <Input
                   id="email"
                   type="email"
-                  value={user.email}
-                  onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                  value={user.email || ""}
+                  onChange={(e) => setUser({ ...user, email: e.target.value })}
                   className="glass border-primary/20"
                 />
               </div>
@@ -826,7 +891,7 @@ export function SettingsPanel() {
                       <div className="flex gap-2">
                   <Input
                     type={hideapi ? 'password' : 'text'}
-                    value={user.token}
+                    value={user.token || ""}
                     readOnly
                     className="glass border-primary/20"
                   />
@@ -849,6 +914,16 @@ export function SettingsPanel() {
                 
                 </div>
               </div>
+            </div>
+            <div className="flex justify-end mt-6">
+              <Button 
+                onClick={handleUpdateProfile} 
+                disabled={!isUserDataModified()}
+                className="neon-glow"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Save Changes
+              </Button>
             </div>
           </Card>
         </TabsContent>
@@ -960,14 +1035,12 @@ export function SettingsPanel() {
                         type={hideapi ? "password" : "text"}
                         onChange={(e)=>{
                           setAudioConfig({
-                                                          ...audioconfig,
-                                                          stt: {
-                                                            ...audioconfig.stt,
-                                                            AA: e.target.value
-                                                          }
-                                                        })
-
-
+                            ...audioconfig,
+                            stt: {
+                              ...audioconfig.stt,
+                              API_KEY: e.target.value
+                            }
+                          })
                         }}
                         />  
                         

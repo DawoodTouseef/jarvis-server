@@ -96,14 +96,6 @@ async def process_pipeline_inlet_filter(request, payload, user, models):
                 ) as response:
                     payload = await response.json()
                     response.raise_for_status()
-            except aiohttp.ClientResponseError as e:
-                res = (
-                    await response.json()
-                    if response.content_type == "application/json"
-                    else {}
-                )
-                if "detail" in res:
-                    raise Exception(response.status, res["detail"])
             except Exception as e:
                 log.exception(f"Connection error: {e}")
 
@@ -149,17 +141,6 @@ async def process_pipeline_outlet_filter(request, payload, user, models):
                 ) as response:
                     payload = await response.json()
                     response.raise_for_status()
-            except aiohttp.ClientResponseError as e:
-                try:
-                    res = (
-                        await response.json()
-                        if "application/json" in response.content_type
-                        else {}
-                    )
-                    if "detail" in res:
-                        raise Exception(response.status, res)
-                except Exception:
-                    pass
             except Exception as e:
                 log.exception(f"Connection error: {e}")
 
@@ -182,8 +163,8 @@ async def get_pipelines_list(request: Request, user=Depends(get_admin_user)):
 
     urlIdxs = [
         idx
-        for idx, response in enumerate(responses)
-        if response is not None and "pipelines" in response
+        for idx, resp in enumerate(responses)
+        if resp is not None and "pipelines" in resp
     ]
 
     return {
@@ -358,6 +339,22 @@ async def delete_pipeline(
 async def get_pipelines(
     request: Request, urlIdx: Optional[int] = None, user=Depends(get_admin_user)
 ):
+    # Validate that urlIdx is provided and is a valid integer
+    if urlIdx is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="urlIdx parameter is required",
+        )
+    
+    # Validate that urlIdx is within the valid range
+    if (not isinstance(urlIdx, int) or 
+        urlIdx < 0 or 
+        urlIdx >= len(request.app.state.config.OPENAI_API_BASE_URLS)):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid urlIdx: {urlIdx}. Must be between 0 and {len(request.app.state.config.OPENAI_API_BASE_URLS) - 1}",
+        )
+    
     r = None
     try:
         url = request.app.state.config.OPENAI_API_BASE_URLS[urlIdx]
@@ -367,7 +364,6 @@ async def get_pipelines(
 
         r.raise_for_status()
         data = r.json()
-
         return {**data}
     except Exception as e:
         # Handle connection error here
