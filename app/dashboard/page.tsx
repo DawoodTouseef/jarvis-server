@@ -16,13 +16,13 @@ import {
   TrendingUp,
   ArrowRight,
   Cloud,
-  Home
+  Home,
+  Brain
 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { apiClient } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
-import { HomeAssistantTest } from "@/components/home-assistant-test"
 
 // Define the activity interface
 interface ActivityItem {
@@ -88,6 +88,13 @@ export default function DashboardPage() {
       icon: Home,
       href: "/dashboard/homeassistant",
       color: "primary",
+    },
+    {
+      title: "Memory Management",
+      description: "Store and manage AI memories",
+      icon: Brain,
+      href: "/dashboard/memories",
+      color: "chart-3",
     },
     {
       title: "Create Pipeline",
@@ -177,7 +184,7 @@ export default function DashboardPage() {
 
         // Process models
         if (modelsResponse.status === "fulfilled" && modelsResponse.value.success && modelsResponse.value.data) {
-          const newValue = modelsResponse.value.data.data.length || 0;
+          const newValue = modelsResponse.value.data.length || 0;
           console.log("Setting Models value to:", newValue);
           updatedStats[1] = {
             ...updatedStats[1],

@@ -181,6 +181,34 @@ Run the test suite with pytest:
 pytest tests/
 ```
 
+## 📦 Building Executables
+
+Jarvis can be compiled into standalone executables for Windows, Linux, and macOS that include both the frontend and backend:
+
+### Prerequisites
+- Python 3.8+
+- Node.js 18+
+- All development dependencies installed
+
+### Build Process
+
+1. **Universal Build (Recommended)**:
+```bash
+python build-all.py
+```
+
+2. **Platform-Specific Builds**:
+- Windows: `build-windows.bat`
+- Linux: `build-linux.sh`
+- macOS: `build-macos.sh`
+
+For detailed instructions, see [BUILDING.md](BUILDING.md).
+
+The executable will:
+- Start the FastAPI backend on port 8080
+- Build and serve the Next.js frontend on port 3000
+- Run both services as a single application
+
 ## 🛠️ Configuration
 
 Jarvis is highly configurable through environment variables. Key configuration options include:

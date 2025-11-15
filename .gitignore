@@ -16,3 +16,4 @@ Pipfile
 .DS_Store
 node_modules
 out
+.pytest_cache

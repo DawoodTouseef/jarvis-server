@@ -492,6 +492,23 @@ export interface Pipeline {
   updated_at: string;
 }
 
+// Memory Interfaces
+export interface Memory {
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface AddMemoryForm {
+  content: string;
+}
+
+export interface UpdateMemoryForm {
+  content: string;
+}
+
 export default class ApiClient {
   private baseUrl: string
   private token: string | null = null
@@ -1843,7 +1860,34 @@ export default class ApiClient {
       body: JSON.stringify(valvesData),
     });
   }
-  
+
+  // Memory Management
+  async getMemories(): Promise<ApiResponse<Memory[]>> {
+    return this.request<Memory[]>("/api/v1/memories/", {
+      method: "GET",
+    });
+  }
+
+  async createMemory(data: AddMemoryForm): Promise<ApiResponse<Memory>> {
+    return this.request<Memory>("/api/v1/memories/add", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateMemory(id: string, data: UpdateMemoryForm): Promise<ApiResponse<Memory>> {
+    return this.request<Memory>(`/api/v1/memories/${id}/update`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteMemory(id: string): Promise<ApiResponse<boolean>> {
+    return this.request<boolean>(`/api/v1/memories/${id}`, {
+      method: "DELETE",
+    });
+  }
+
 }
 
 export const apiClient = new ApiClient()
