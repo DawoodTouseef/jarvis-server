@@ -2445,4 +2445,134 @@ true
   "content": "string",
   "user_id": "string",
   "created_at": "2023-01-01T00:00:00",
-  "updated_at": "2023-01-01T00
+  "updated_at": "2023-01-01T00:00:00"
+}
+```
+- **Tags:** memories
+
+## WebSocket State CRUD Operations
+
+Real-time CRUD operations for Home Assistant states via WebSocket.
+
+### Create State
+- **Event Type:** `states:create`
+- **Description:** Creates a new state in the database
+- **Request Parameters:**
+  - `entity_id` (string): Unique identifier for the entity
+  - `state` (string): Current state value
+  - `attributes` (object, optional): Additional state attributes
+- **Success Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "state_id": 123,
+    "entity_id": "light.test_light",
+    "state": "on",
+    "attributes": {},
+    "last_changed": "2023-01-01T00:00:00Z",
+    "last_updated": "2023-01-01T00:00:00Z"
+  }
+}
+```
+- **Error Response:**
+```json
+{
+  "success": false,
+  "error": "Error message"
+}
+```
+
+### Get State
+- **Event Type:** `states:get`
+- **Description:** Retrieves the latest state for a specific entity
+- **Request Parameters:**
+  - `entity_id` (string): Unique identifier for the entity
+- **Success Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "state_id": 123,
+    "entity_id": "light.test_light",
+    "state": "on",
+    "attributes": {},
+    "last_changed": "2023-01-01T00:00:00Z",
+    "last_updated": "2023-01-01T00:00:00Z"
+  }
+}
+```
+- **Error Response:**
+```json
+{
+  "success": false,
+  "error": "Error message"
+}
+```
+
+### Update State
+- **Event Type:** `states:update`
+- **Description:** Updates an existing state by ID
+- **Request Parameters:**
+  - `state_id` (integer): ID of the state to update
+  - `state` (string, optional): New state value
+  - `attributes` (object, optional): New state attributes
+- **Success Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "state_id": 123,
+    "entity_id": "light.test_light",
+    "state": "off",
+    "attributes": {},
+    "last_changed": "2023-01-01T00:00:00Z",
+    "last_updated": "2023-01-01T00:00:00Z"
+  }
+}
+```
+- **Error Response:**
+```json
+{
+  "success": false,
+  "error": "Error message"
+}
+```
+
+### Delete State
+- **Event Type:** `states:delete`
+- **Description:** Deletes a state by ID
+- **Request Parameters:**
+  - `state_id` (integer): ID of the state to delete
+- **Success Response:**
+```json
+{
+  "success": true,
+  "message": "State 123 deleted successfully"
+}
+```
+- **Error Response:**
+```json
+{
+  "success": false,
+  "error": "Error message"
+}
+```
+
+### State Changed Event
+- **Event Type:** `state_changed`
+- **Description:** Broadcast to all clients when a state is created, updated, or deleted
+- **Response:**
+```json
+{
+  "type": "state_changed",
+  "data": {
+    "entity_id": "light.test_light",
+    "new_state": {
+      "state": "on",
+      "attributes": {}
+    }
+  }
+}
+```
+

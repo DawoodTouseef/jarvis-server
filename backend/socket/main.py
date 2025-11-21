@@ -711,6 +711,300 @@ async def get_location(sid, data):
         log.error(f"Error processing location data: {e}")
 
 
+# CRUD operations for States table via WebSocket
+@sio.on("states:create")
+async def create_state(sid, data):
+    """Create a new state via WebSocket"""
+    log.info(f"Creating state: {data}")
+    
+    # Get the user from the session
+    user = SESSION_POOL.get(sid)
+    if not user:
+        log.error(f"No user found for session {sid}")
+        await sio.emit("states:create:response", {
+            "success": False,
+            "error": "Unauthorized"
+        }, room=sid)
+        return
+    
+    try:
+        from backend.models.home_assistant_controllers import StatesCtrl
+        
+        # Extract required fields
+        entity_id = data.get("entity_id")
+        state_value = data.get("state")
+        
+        if not entity_id or state_value is None:
+            await sio.emit("states:create:response", {
+                "success": False,
+                "error": "Missing required fields: entity_id and state"
+            }, room=sid)
+            return
+        
+        # Create the state
+        state = StatesCtrl.create_state(
+            entity_id=entity_id,
+            state=state_value,
+            attributes=data.get("attributes"),
+            context_user_id=user.get("id")
+        )
+        
+        if state:
+            # Parse attributes
+            attributes = {}
+            if state.attributes:
+                try:
+                    import json
+                    attributes = json.loads(state.attributes)
+                except:
+                    attributes = {}
+            
+            # Emit success response
+            await sio.emit("states:create:response", {
+                "success": True,
+                "data": {
+                    "state_id": state.state_id,
+                    "entity_id": state.entity_id,
+                    "state": state.state,
+                    "attributes": attributes,
+                    "last_changed": state.last_changed.isoformat() if state.last_changed else None,
+                    "last_updated": state.last_updated.isoformat() if state.last_updated else None
+                }
+            }, room=sid)
+            
+            # Emit state changed event to all clients
+            await sio.emit("state_changed", {
+                "type": "state_changed",
+                "data": {
+                    "entity_id": entity_id,
+                    "new_state": {
+                        "state": state_value,
+                        "attributes": data.get("attributes", {})
+                    }
+                }
+            })
+            log.info(f"State created for {entity_id}")
+        else:
+            await sio.emit("states:create:response", {
+                "success": False,
+                "error": "Failed to create state"
+            }, room=sid)
+            log.error(f"Failed to create state for {entity_id}")
+            
+    except Exception as e:
+        log.error(f"Error creating state: {e}")
+        await sio.emit("states:create:response", {
+            "success": False,
+            "error": str(e)
+        }, room=sid)
+
+
+@sio.on("states:get")
+async def get_state(sid, data):
+    """Get a state by entity ID via WebSocket"""
+    log.info(f"Getting state: {data}")
+    
+    # Get the user from the session
+    user = SESSION_POOL.get(sid)
+    if not user:
+        log.error(f"No user found for session {sid}")
+        await sio.emit("states:get:response", {
+            "success": False,
+            "error": "Unauthorized"
+        }, room=sid)
+        return
+    
+    try:
+        from backend.models.home_assistant_controllers import StatesCtrl
+        
+        # Extract required field
+        entity_id = data.get("entity_id")
+        
+        if not entity_id:
+            await sio.emit("states:get:response", {
+                "success": False,
+                "error": "Missing required field: entity_id"
+            }, room=sid)
+            return
+        
+        # Get the latest state for this entity
+        state = StatesCtrl.get_latest_state_by_entity_id(entity_id)
+        
+        if state:
+            # Parse attributes
+            attributes = {}
+            if state.attributes:
+                try:
+                    import json
+                    attributes = json.loads(state.attributes)
+                except:
+                    attributes = {}
+            
+            # Emit success response
+            await sio.emit("states:get:response", {
+                "success": True,
+                "data": {
+                    "state_id": state.state_id,
+                    "entity_id": state.entity_id,
+                    "state": state.state,
+                    "attributes": attributes,
+                    "last_changed": state.last_changed.isoformat() if state.last_changed else None,
+                    "last_updated": state.last_updated.isoformat() if state.last_updated else None
+                }
+            }, room=sid)
+            log.info(f"State retrieved for {entity_id}")
+        else:
+            await sio.emit("states:get:response", {
+                "success": False,
+                "error": "State not found"
+            }, room=sid)
+            log.info(f"State not found for {entity_id}")
+            
+    except Exception as e:
+        log.error(f"Error getting state: {e}")
+        await sio.emit("states:get:response", {
+            "success": False,
+            "error": str(e)
+        }, room=sid)
+
+
+@sio.on("states:update")
+async def update_state(sid, data):
+    """Update an existing state via WebSocket"""
+    log.info(f"Updating state: {data}")
+    
+    # Get the user from the session
+    user = SESSION_POOL.get(sid)
+    if not user:
+        log.error(f"No user found for session {sid}")
+        await sio.emit("states:update:response", {
+            "success": False,
+            "error": "Unauthorized"
+        }, room=sid)
+        return
+    
+    try:
+        from backend.models.home_assistant_controllers import StatesCtrl
+        
+        # Extract required fields
+        state_id = data.get("state_id")
+        if not state_id:
+            await sio.emit("states:update:response", {
+                "success": False,
+                "error": "Missing required field: state_id"
+            }, room=sid)
+            return
+        
+        # Update the state
+        state = StatesCtrl.update_state(
+            state_id=state_id,
+            state=data.get("state"),
+            attributes=data.get("attributes")
+        )
+        
+        if state:
+            # Parse attributes
+            attributes = {}
+            if state.attributes:
+                try:
+                    import json
+                    attributes = json.loads(state.attributes)
+                except:
+                    attributes = {}
+            
+            # Emit success response
+            await sio.emit("states:update:response", {
+                "success": True,
+                "data": {
+                    "state_id": state.state_id,
+                    "entity_id": state.entity_id,
+                    "state": state.state,
+                    "attributes": attributes,
+                    "last_changed": state.last_changed.isoformat() if state.last_changed else None,
+                    "last_updated": state.last_updated.isoformat() if state.last_updated else None
+                }
+            }, room=sid)
+            
+            # Emit state changed event to all clients
+            await sio.emit("state_changed", {
+                "type": "state_changed",
+                "data": {
+                    "entity_id": state.entity_id,
+                    "new_state": {
+                        "state": state.state,
+                        "attributes": attributes
+                    }
+                }
+            })
+            log.info(f"State updated for state_id {state_id}")
+        else:
+            await sio.emit("states:update:response", {
+                "success": False,
+                "error": "Failed to update state"
+            }, room=sid)
+            log.error(f"Failed to update state for state_id {state_id}")
+            
+    except Exception as e:
+        log.error(f"Error updating state: {e}")
+        await sio.emit("states:update:response", {
+            "success": False,
+            "error": str(e)
+        }, room=sid)
+
+
+@sio.on("states:delete")
+async def delete_state(sid, data):
+    """Delete a state by ID via WebSocket"""
+    log.info(f"Deleting state: {data}")
+    
+    # Get the user from the session
+    user = SESSION_POOL.get(sid)
+    if not user:
+        log.error(f"No user found for session {sid}")
+        await sio.emit("states:delete:response", {
+            "success": False,
+            "error": "Unauthorized"
+        }, room=sid)
+        return
+    
+    try:
+        from backend.models.home_assistant_controllers import StatesCtrl
+        
+        # Extract required field
+        state_id = data.get("state_id")
+        
+        if not state_id:
+            await sio.emit("states:delete:response", {
+                "success": False,
+                "error": "Missing required field: state_id"
+            }, room=sid)
+            return
+        
+        # Delete the state
+        success = StatesCtrl.delete_state(state_id)
+        
+        if success:
+            # Emit success response
+            await sio.emit("states:delete:response", {
+                "success": True,
+                "message": f"State {state_id} deleted successfully"
+            }, room=sid)
+            log.info(f"State deleted for state_id {state_id}")
+        else:
+            await sio.emit("states:delete:response", {
+                "success": False,
+                "error": "Failed to delete state"
+            }, room=sid)
+            log.error(f"Failed to delete state for state_id {state_id}")
+            
+    except Exception as e:
+        log.error(f"Error deleting state: {e}")
+        await sio.emit("states:delete:response", {
+            "success": False,
+            "error": str(e)
+        }, room=sid)
+
+
 @sio.event
 async def disconnect(sid):
     if sid in SESSION_POOL:
