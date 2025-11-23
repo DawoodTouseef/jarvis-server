@@ -989,16 +989,7 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
     
     // If state is "home", show home icon
     if (state === "home") {
-      return new L.Icon({
-        iconUrl: "https://cdn-icons-png.flaticon.com/512/844/844754.png",
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-        popupAnchor: [0, -32]
-      });
-    }
-    
-    // Modern user location icon with glowing effect
-    // Create a custom SVG icon for the user location
+     
     const svgIcon = `
       <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
         <defs>
@@ -1032,7 +1023,14 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
       iconSize: [40, 40],
       iconAnchor: [20, 20],
       popupAnchor: [0, -20]
-    });
+    }); 
+    }
+    return new L.Icon({
+        iconUrl: "https://cdn-icons-png.flaticon.com/512/844/844754.png",
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+      });
   };
 
   // Function to get icon based on entity state with modern design
@@ -1372,51 +1370,11 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
     
     return (
       <>
-        {/* Google Maps Style Top Bar */}
-        <div className="leaflet-top leaflet-left w-full">
-          <div className="leaflet-control w-full px-4 py-3">
-            <div className="flex items-center gap-3">
-              {/* Sidebar Toggle Button */}
-              <button
-                type="button"
-                onClick={toggleSidebar}
-                className="flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full h-10 w-10 p-0 transition-all shadow-md hover:shadow-lg duration-200 ease-in-out"
-                aria-label="Toggle sidebar"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                  <line x1="3" y1="12" x2="21" y2="12"></line>
-                  <line x1="3" y1="6" x2="21" y2="6"></line>
-                  <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-              </button>
-              
-            </div>
-          </div>
-        </div>
+    
         
         {/* Google Maps Style Right Controls */}
         <div className="leaflet-top leaflet-right mt-24">
           <div className="leaflet-control flex flex-col gap-3 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-            {/* Zoom Controls */}
-            <div className="flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-              <button 
-                type="button" 
-                onClick={handleZoomIn}
-                className="flex items-center justify-center h-10 w-10 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                aria-label="Zoom in"
-              >
-                <ZoomIn className="w-5 h-5" />
-              </button>
-              <div className="border-t border-gray-200 dark:border-gray-700" />
-              <button 
-                type="button" 
-                onClick={handleZoomOut}
-                className="flex items-center justify-center h-10 w-10 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                aria-label="Zoom out"
-              >
-                <ZoomOut className="w-5 h-5" />
-              </button>
-            </div>
             
             {/* Location Button */}
             <button 
@@ -1517,26 +1475,6 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
               <Locate className={`w-6 h-6 ${props.isLocating ? 'animate-spin' : ''}`} />
             </button>
             
-            {/* Zoom Controls */}
-            <div className="flex bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-              <button 
-                type="button" 
-                onClick={handleZoomIn}
-                className="flex items-center justify-center h-12 w-12 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                aria-label="Zoom in"
-              >
-                <ZoomIn className="w-6 h-6" />
-              </button>
-              <div className="border-l border-gray-200 dark:border-gray-700" />
-              <button 
-                type="button" 
-                onClick={handleZoomOut}
-                className="flex items-center justify-center h-12 w-12 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                aria-label="Zoom out"
-              >
-                <ZoomOut className="w-6 h-6" />
-              </button>
-            </div>
             
             {/* Map Layers Button */}
             <button 
@@ -1597,249 +1535,7 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
           </div>
         </div>
         
-        {/* Google Maps Style Sidebar */}
-        <div className={`leaflet-top leaflet-left h-full ${props.isSidebarCollapsed ? 'w-12' : 'w-80'} transition-all duration-300 ease-in-out`}>
-          <div className="leaflet-control h-full bg-white dark:bg-gray-800 rounded-r-lg shadow-lg flex flex-col">
-            {/* Sidebar Header */}
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              {props.isSidebarCollapsed ? (
-                <button 
-                  onClick={() => props.setIsSidebarCollapsed(false)}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-                  aria-label="Expand sidebar"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
-                </button>
-              ) : (
-                <>
-                  <h2 className="text-lg font-semibold">Directions</h2>
-                  <button 
-                    onClick={() => props.setIsSidebarCollapsed(true)}
-                    className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-                    aria-label="Collapse sidebar"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </>
-              )}
-            </div>
-            
-            {!props.isSidebarCollapsed && (
-              <div className="flex-1 overflow-y-auto p-4">
-                <form onSubmit={props.handleGetDirections} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">From</label>
-                    <div className="relative">
-                      <Input
-                        type="text"
-                        value={props.fromLocation}
-                        onChange={(e) => props.setFromLocation(e.target.value)}
-                        placeholder="Choose starting point"
-                        className="w-full pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (props.markerPosition) {
-                            props.setFromLocation(`${props.markerPosition[0]}, ${props.markerPosition[1]}`);
-                          }
-                        }}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        title="Use current location"
-                      >
-                        <Locate className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-1">To</label>
-                    <div className="relative">
-                      <Input
-                        type="text"
-                        value={props.toLocation}
-                        onChange={(e) => props.setToLocation(e.target.value)}
-                        placeholder="Choose destination"
-                        className="w-full pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (props.markerPosition) {
-                            props.setToLocation(`${props.markerPosition[0]}, ${props.markerPosition[1]}`);
-                          }
-                        }}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        title="Use current location"
-                      >
-                        <Locate className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Mode of Transport</label>
-                    <div className="flex gap-2 flex-wrap">
-                      {(['car', 'walk', 'bike', 'train', 'bus'] as TransportMode[]).map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => props.setTransportMode(mode)}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
-                            props.transportMode === mode
-                              ? 'bg-blue-500 text-white shadow-lg'
-                              : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-                          }`}
-                        >
-                          {mode === 'car' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a1 1 0 0 0-.8-.4H5.24a2 2 0 0 0-1.8 1.1l-.8 1.63A6 6 0 0 0 2 12.42V16h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg>}
-                          {mode === 'walk' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 7H7a2 2 0 0 0-2 2v4h4"/><path d="M11 11h2m0 0v4m0-4h4m-8 6h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2Z"/><path d="M11 15v4"/><path d="M18 15v4"/><path d="M3 15v4"/></svg>}
-                          {mode === 'bike' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M15 17H7"/><path d="M7 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M7 17V7H5a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2l2 7"/><path d="M13 17v-5h4a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"/><circle cx="17" cy="17" r="1"/><circle cx="9" cy="17" r="1"/></svg>}
-                          {mode === 'train' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3.1V7a4 4 0 0 0 8 0V3.1"/><path d="m9 15 1 1"/><path d="m14 15-1 1"/><path d="M18 12h.01"/><path d="M18 16h.01"/><path d="M2 12h.01"/><path d="M2 16h.01"/><path d="M6 12h.01"/><path d="M6 16h.01"/><path d="M22 12v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4"/><path d="M15 17v3a1 1 0 0 1-1 1H6l-4-4V7a2 2 0 0 1 2-2h6l4 4V17a1 1 0 0 1-1 1Z"/></svg>}
-                          {mode === 'bus' && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 5h6a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="M8 5h6a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/><path d="M16 11h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2"/><path d="M8 11H6a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2"/><path d="M12 19v-4"/><path d="M2 19v-4"/><path d="M22 19v-4"/><circle cx="12" cy="17" r="1"/><circle cx="2" cy="17" r="1"/><circle cx="22" cy="17" r="1"/></svg>}
-                          <span className="capitalize text-sm font-medium">{mode}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <Button 
-                      type="submit" 
-                      disabled={props.isGettingDirections}
-                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
-                    >
-                      {props.isGettingDirections ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                          Getting Directions...
-                        </>
-                      ) : (
-                        "Get Directions"
-                      )}
-                    </Button>
-                    <Button 
-                      type="button" 
-                      onClick={() => {
-                        const temp = props.fromLocation;
-                        props.setFromLocation(props.toLocation);
-                        props.setToLocation(temp);
-                      }}
-                      className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200"
-                      aria-label="Reverse directions"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                        <polyline points="17 1 21 5 17 9"></polyline>
-                        <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
-                        <polyline points="7 23 3 19 7 15"></polyline>
-                        <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
-                      </svg>
-                    </Button>
-                  </div>
-                </form>
-                
-                {/* Favorites Section */}
-                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="font-medium">Favorite Places</span>
-                    <button 
-                      onClick={() => {
-                        if (props.markerPosition) {
-                          props.toggleFavorite(`${props.markerPosition[0]}, ${props.markerPosition[1]}`);
-                        }
-                      }}
-                      className="text-sm text-blue-500 hover:text-blue-700 dark:hover:text-blue-300"
-                    >
-                      + Add Current
-                    </button>
-                  </div>
-                  <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
-                    {props.favorites.map((fav, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                        <span className="text-sm truncate">{fav}</span>
-                        <button 
-                          onClick={() => props.toggleFavorite(fav)}
-                          className="text-gray-500 hover:text-red-500"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                    {props.favorites.length === 0 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
-                        No favorite places yet
-                      </p>
-                    )}
-                  </div>
-                </div>
-                
-                {props.routeData && (
-                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="font-medium">Route Summary</span>
-                      <span className="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
-                        {props.routeData.distance} km • {props.routeData.duration} min
-                      </span>
-                    </div>
-                    <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
-                      {props.routeData.steps.map((step, index) => (
-                        <div key={index} className="flex items-start gap-3 text-sm">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center mt-0.5">
-                            {index + 1}
-                          </span>
-                          <span>{step.instruction}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Navigation Controls */}
-                {props.routeData && (
-                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="font-medium">Navigation</span>
-                      {props.isNavigating ? (
-                        <Button 
-                          onClick={props.stopNavigation}
-                          className="bg-red-500 hover:bg-red-600 text-white"
-                        >
-                          Stop Navigation
-                        </Button>
-                      ) : (
-                        <Button 
-                          onClick={props.startNavigation}
-                          className="bg-green-500 hover:bg-green-600 text-white"
-                        >
-                          Start Navigation
-                        </Button>
-                      )}
-                    </div>
-                    
-                    {props.isNavigating && (
-                      <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 mb-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium">Next Turn</span>
-                          <span className="text-sm">ETA: {props.eta}</span>
-                        </div>
-                        <div className="text-lg font-semibold mb-2">{props.nextTurn}</div>
-                        <div className="text-sm">In {props.distanceToNextTurn.toFixed(1)} km</div>
-                      </div>
-                    )}
-                    
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                      <p>Follow the route step by step with turn-by-turn navigation.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        
       </>
     );
   };
