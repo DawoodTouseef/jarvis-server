@@ -3,6 +3,10 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 cd "$SCRIPT_DIR" || exit
 
+echo "========================================"
+echo "JARVIS SERVER STARTUP"
+echo "========================================"
+
 # Add conditional Playwright browser installation
 if [[ "${WEB_LOADER_ENGINE,,}" == "playwright" ]]; then
     if [[ -z "${PLAYWRIGHT_WS_URL}" ]]; then
@@ -33,6 +37,19 @@ if test "$WEBUI_SECRET_KEY $WEBUI_JWT_SECRET_KEY" = " "; then
 
   echo "Loading WEBUI_SECRET_KEY from $KEY_FILE"
   WEBUI_SECRET_KEY=$(cat "$KEY_FILE")
+fi
+
+# Check Docker status
+echo "Checking Docker status..."
+if command -v docker &> /dev/null; then
+    if docker info &> /dev/null; then
+        echo "[✓] Docker is running"
+    else
+        echo "[!] Docker is not running or not accessible"
+        echo "    Please start Docker before running this script"
+    fi
+else
+    echo "[!] Docker is not installed"
 fi
 
 if [[ "${USE_OLLAMA_DOCKER,,}" == "true" ]]; then
@@ -78,6 +95,14 @@ if [ "$#" -gt 0 ]; then
 else
     ARGS=(--workers "$UVICORN_WORKERS")
 fi
+
+echo "========================================"
+echo "Starting Jarvis Server..."
+echo "========================================"
+echo "Host: $HOST"
+echo "Port: $PORT"
+echo "Workers: $UVICORN_WORKERS"
+echo "========================================"
 
 # Run uvicorn
 WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY" exec "$PYTHON_CMD" -m uvicorn backend.main:app \

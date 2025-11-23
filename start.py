@@ -7,8 +7,9 @@ import subprocess
 import logging
 import socket
 import docker
-from docker.errors import DockerException, NotFound
+from docker.errors import DockerException, NotFound, ImageNotFound
 from docker.types import DeviceRequest
+from backend.env import OPEN_WEBUI_DIR
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -37,16 +38,69 @@ def run_or_start_container(name, image, **kwargs):
     try:
         container = client.containers.get(name)
         if container.status == 'running':
-            print(f"[✓] Container '{name}' is already running.")
+            logger.info(f"[✓] Container '{name}' is already running.")
+            # Get container details for more informative output
+            container.reload()
+            ports = container.attrs['NetworkSettings']['Ports']
+            port_info = ", ".join([f"{k}->{v[0]['HostPort']}" if v else k for k, v in ports.items()])
+            # Safely get image tags
+            image_tags = container.image.tags if container.image and hasattr(container.image, 'tags') else []
+            image_info = image_tags[0] if image_tags else 'N/A'
+            logger.info(f"    Image: {image_info}")
+            logger.info(f"    Ports: {port_info}")
             return f"'{name}' already running"
         else:
-            print(f"[+] Container '{name}' exists but stopped. Starting...")
+            logger.info(f"[+] Container '{name}' exists but stopped. Starting...")
             container.start()
+            # Wait a moment for container to start
+            container.reload()
             return f"'{name}' started"
     except NotFound:
-        print(f"[+] Container '{name}' not found. Creating and running...")
-        client.containers.run(image, name=name, detach=True, **kwargs)
-        return f"'{name}' created and started"
+        logger.info(f"[+] Container '{name}' not found. Creating and running...")
+        try:
+            # Try to pull the image first
+            logger.info(f"    Pulling image '{image}'...")
+            client.images.pull(image)
+            logger.info(f"    [✓] Image '{image}' pulled successfully.")
+        except Exception as pull_error:
+            logger.warning(f"    [!] Failed to pull image '{image}': {str(pull_error)}")
+            logger.info(f"    Checking if image exists locally...")
+            try:
+                # Check if image exists locally
+                client.images.get(image)
+                logger.info(f"    [✓] Image '{image}' found locally.")
+            except ImageNotFound:
+                logger.warning(f"    [!] Image '{image}' not found locally.")
+                logger.info(f"    Attempting to create container anyway (Docker may pull automatically)...")
+            except Exception as local_check_error:
+                logger.warning(f"    [!] Error checking for local image: {str(local_check_error)}")
+        
+        try:
+            container = client.containers.run(image, name=name, detach=True, **kwargs)
+            # Wait a moment for container to start
+            container.reload()
+            logger.info(f"    [✓] Container '{name}' created and started.")
+            return f"'{name}' created and started"
+        except Exception as run_error:
+            logger.error(f"    [✗] Failed to create container '{name}' with image '{image}': {str(run_error)}")
+            # Try to provide more specific error information
+            if "pull access denied" in str(run_error).lower():
+                logger.error(f"    [!] Pull access denied for '{image}'. This might be due to:")
+                logger.error(f"        1. The image name is incorrect")
+                logger.error(f"        2. You don't have permission to access this image")
+                logger.error(f"        3. Docker Hub is unreachable")
+                logger.error(f"        4. You might need to log in to Docker Hub")
+            elif "not found" in str(run_error).lower():
+                logger.error(f"    [!] Image '{image}' not found. Please verify the image name.")
+            elif "volume" in str(run_error).lower() or "mount" in str(run_error).lower():
+                logger.error(f"    [!] Volume/mount issue detected. This might be due to:")
+                logger.error(f"        1. File permissions issues")
+                logger.error(f"        2. Path does not exist")
+                logger.error(f"        3. Invalid volume specification")
+            return f"'{name}' failed: {str(run_error)}"
+    except Exception as e:
+        logger.error(f"[✗] Failed to manage container '{name}': {str(e)}")
+        return f"'{name}' failed: {str(e)}"
 
 def start_all_services():
     network = "tor_net"
@@ -54,12 +108,16 @@ def start_all_services():
     # Create network if not exists
     try:
         client.networks.get(network)
+        logger.info(f"[✓] Network '{network}' already exists.")
     except NotFound:
+        logger.info(f"[+] Creating network '{network}'...")
         client.networks.create(network)
+        logger.info(f"[✓] Network '{network}' created.")
 
+    logger.info("Starting Docker services...")
     responses = []
 
-    run_or_start_container(
+    mariadb_response = run_or_start_container(
         name="mariadb",
         image="mariadb",
         environment={
@@ -72,7 +130,9 @@ def start_all_services():
         network=network,
         ports={"3306/tcp": 3306},
     )
-    responses.append(run_or_start_container(
+    responses.append(mariadb_response)
+    
+    nextcloud_response = run_or_start_container(
         name="nextcloud",
         image="nextcloud",
         ports={"80/tcp": 80},
@@ -84,9 +144,10 @@ def start_all_services():
         },
         volumes={"nextcloud_data": {"bind": "/var/www/html", "mode": "rw"}},
         network=network
-    ))
+    )
+    responses.append(nextcloud_response)
 
-    responses.append(run_or_start_container(
+    ollama_response = run_or_start_container(
         name="ollama",
         image="ollama/ollama",
         ports={"11434/tcp": 11434},
@@ -95,14 +156,63 @@ def start_all_services():
         device_requests=[
             DeviceRequest(count=-1, capabilities=[["gpu"]])
         ],
-    ))
+    )
+    responses.append(ollama_response)
 
-    responses.append(run_or_start_container(
+    tor_response = run_or_start_container(
         name="tor",
         image="dockurr/tor",
         ports={"9050/tcp": 9050},
         network=network
-    ))
+    )
+    responses.append(tor_response)
+    
+    # Handle SearxNG with special care for volume mounting
+    logger.info("[+] Setting up SearxNG container...")
+    settings_yml=os.path.join(OPEN_WEBUI_DIR,"settings.yml")
+    try:
+        # Check if settings.yml exists, if not create a basic one
+        if not os.path.exists(settings_yml):
+            logger.info("    Creating default settings.yml for SearxNG...")
+            default_settings = """use_default_settings: true
+
+server:
+  secret_key: "c8f9e6b2a4d7f3e1b5c9d8a6f2e4b7c1d9e3f8a5b2c7d4e6f1a8b3c5d2e9f4a1"
+  limiter: false
+  image_proxy: true
+
+search:
+  formats:
+    - html
+    - json
+
+
+"""
+            with open(settings_yml, "w") as f:
+                f.write(default_settings)
+            logger.info("    [✓] Created default settings.yml")
+        
+        searxng_response = run_or_start_container(
+            name="searxng",
+            image="searxng/searxng",
+            ports={"8080/tcp": 8081},
+            network=network,
+            volumes={settings_yml: {"bind": "/etc/searxng/settings.yml", "mode": "ro"}},
+            environment={"SEARXNG_BASE_URL": "http://localhost:8081"}
+        )
+        responses.append(searxng_response)
+    except Exception as e:
+        logger.error(f"[✗] Failed to set up SearxNG container: {str(e)}")
+        responses.append(f"SearxNG setup failed: {str(e)}")
+    
+    # Log summary of all services
+    logger.info("=" * 50)
+    logger.info("DOCKER SERVICES STATUS SUMMARY:")
+    logger.info("=" * 50)
+    for i, response in enumerate(responses, 1):
+        logger.info(f"{i}. {response}")
+    logger.info("=" * 50)
+        
     return {"status": "ok", "details": responses}
 
 def install_playwright():
@@ -192,15 +302,19 @@ def start_server():
     dockers_running=True
     try:
         client = docker.from_env()
-        logger.info("Docker is running")   
-    except DockerException:
-        print("Docker is not running")
+        logger.info("[✓] Docker daemon is running")   
+    except DockerException as e:
+        logger.error(f"[✗] Docker is not running or not accessible: {str(e)}")
+        logger.info("Please start Docker Desktop or ensure Docker is running.")
         dockers_running= False
     
     pool = Pool(processes=(cpu_count() - 1))
     pool.apply_async(jarvis_server, args=())
     if dockers_running:
+        logger.info("Starting Docker services in background...")
         pool.apply_async(start_all_services,args=())
+    else:
+        logger.warning("Skipping Docker services startup due to Docker not being available.")
     pool.close()
     pool.join()
 

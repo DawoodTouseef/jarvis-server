@@ -6,6 +6,10 @@ SETLOCAL ENABLEDELAYEDEXPANSION
 SET "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%" || exit /b
 
+echo ========================================
+echo JARVIS SERVER STARTUP
+echo ========================================
+
 :: Add conditional Playwright browser installation
 IF /I "%WEB_LOADER_ENGINE%" == "playwright" (
     IF "%PLAYWRIGHT_WS_URL%" == "" (
@@ -43,8 +47,27 @@ IF "%WEBUI_SECRET_KEY% %WEBUI_JWT_SECRET_KEY%" == " " (
     SET /p WEBUI_SECRET_KEY=<%KEY_FILE%
 )
 
+:: Check if Docker is running
+echo Checking Docker status...
+docker info >nul 2>&1
+IF %ERRORLEVEL% EQU 0 (
+    echo [✓] Docker is running
+) ELSE (
+    echo [!] Docker is not running or not accessible
+    echo     Please start Docker Desktop before running this script
+)
+
 :: Execute uvicorn
 SET "WEBUI_SECRET_KEY=%WEBUI_SECRET_KEY%"
 IF "%UVICORN_WORKERS%"=="" SET UVICORN_WORKERS=1
+
+echo ========================================
+echo Starting Jarvis Server...
+echo ========================================
+echo Host: %HOST%
+echo Port: %PORT%
+echo Workers: %UVICORN_WORKERS%
+echo ========================================
+
 uvicorn backend.main:app --host "%HOST%" --port "%PORT%" --forwarded-allow-ips '*' --workers %UVICORN_WORKERS% --ws auto
 :: For ssl user uvicorn backend.main:app --host "%HOST%" --port "%PORT%" --forwarded-allow-ips '*' --ssl-keyfile "key.pem" --ssl-certfile "cert.pem" --ws auto
