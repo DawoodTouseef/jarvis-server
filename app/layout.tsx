@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: "J.A.R.V.I.S. ",
   description: "Futuristic J.A.R.V.I.S. Dashboard & Control Center",
   generator: "v0.app",
+  icons: {
+    icon: "/favicon.svg",
+  },
 }
 
 export default function RootLayout({

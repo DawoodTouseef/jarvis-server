@@ -64,13 +64,17 @@ export function LocationTracker() {
       return;
     }
 
+    // Get the base URL from the API client
+    const baseUrl = apiClient.getBaseUrl();
+    
     // Create new Socket.IO connection
-    const socket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080", {
+    const socket = io(baseUrl, {
       path: "/ws",
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      timeout: 10000, // 10 second timeout
       auth: {
         token: token
       }
@@ -94,7 +98,11 @@ export function LocationTracker() {
       console.log("Location tracking Socket.IO connection closed:", reason);
       if (reason === "io server disconnect") {
         // The disconnection was initiated by the server, you need to reconnect manually
-        socket.connect();
+        setTimeout(() => {
+          if (socketRef.current === socket) {
+            socket.connect();
+          }
+        }, 1000);
       }
     });
 
@@ -154,11 +162,36 @@ export function LocationTracker() {
     });
   };
 
-  // Reverse geocode to get address (simplified version)
+  // Reverse geocode to get address using OpenStreetMap Nominatim
   const getAddressFromCoordinates = async (lat: number, lng: number): Promise<string> => {
-    // In a real implementation, you would call a reverse geocoding API
-    // For now, we'll return a placeholder
-    return `Approximate location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    try {
+      // Use OpenStreetMap Nominatim for reverse geocoding
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'JARVIS-App/1.0' // Required by Nominatim terms
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Geocoding failed with status ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.display_name) {
+        return data.display_name;
+      } else {
+        // Fallback to coordinates if no address found
+        return `Approximate location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      }
+    } catch (error) {
+      console.error("Error getting address from coordinates:", error);
+      // Fallback to coordinates if geocoding fails
+      return `Approximate location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
   };
 
   // Send location to backend via WebSocket
@@ -227,6 +260,7 @@ export function LocationTracker() {
       } catch (error: any) {
         console.error("Error getting location:", error);
         setLocationError(error.message);
+        // Don't stop tracking on error, just continue trying
       }
     }, 300000); // 5 minutes
   };
@@ -244,8 +278,14 @@ export function LocationTracker() {
   // Initialize when user is authenticated
   useEffect(() => {
     if (currentUser) {
-      connectToWebSocket();
-      startLocationTracking();
+      // Check if geolocation is available before starting
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        connectToWebSocket();
+        startLocationTracking();
+      } else {
+        console.warn("Geolocation is not available in this environment");
+        setLocationError("Geolocation is not supported by this browser");
+      }
     }
 
     return () => {

@@ -109,6 +109,9 @@ function MapManagement() {
   const [CircleMarker, setCircleMarker] = useState<any>(null);
   const [Polyline, setPolyline] = useState<any>(null);
   
+  // Check if we're on the client side
+
+  
   const [entities, setEntities] = useState<EntityState[]>([]);
   const [deviceLocations, setDeviceLocations] = useState<{[key: string]: [number, number]}>({});
   const [loading, setLoading] = useState(true);
@@ -116,6 +119,35 @@ function MapManagement() {
   const [mapInstance, setMapInstance] = useState<any>(null);
   
   const [isClient, setIsClient] = useState(false);
+  
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
+  // Dynamically load Leaflet CSS files on the client side
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isClient) {
+      // Check if the CSS files are already loaded to avoid duplicates
+      const isLeafletCssLoaded = document.querySelector('link[href*="leaflet.css"]');
+      const isCompatibilityCssLoaded = document.querySelector('link[href*="leaflet-defaulticon-compatibility.css"]');
+      
+      // Load Leaflet CSS if not already loaded
+      if (!isLeafletCssLoaded) {
+        const leafletCss = document.createElement('link');
+        leafletCss.rel = 'stylesheet';
+        leafletCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(leafletCss);
+      }
+      
+      // Load Leaflet compatibility CSS if not already loaded
+      if (!isCompatibilityCssLoaded) {
+        const compatibilityCss = document.createElement('link');
+        compatibilityCss.rel = 'stylesheet';
+        compatibilityCss.href = 'https://cdn.jsdelivr.net/npm/leaflet-defaulticon-compatibility@0.1.2/dist/leaflet-defaulticon-compatibility.css';
+        document.head.appendChild(compatibilityCss);
+      }
+    }
+  }, [isClient]);
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mapRef = useRef<any>(null);
@@ -1681,9 +1713,9 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
       
       if (token) {
         // Create Socket.IO connection for location tracking
-        const socket: Socket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080", {
+        const socket = io('http://localhost:8080', {
           path: "/ws",
-          transports: ["websocket", "polling"],
+          transports: ['websocket', 'polling'],
           reconnection: true,
           reconnectionAttempts: 5,
           reconnectionDelay: 1000,
@@ -1691,6 +1723,7 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
             token: token
           }
         });
+
 
         socket.on('connect', () => {
           console.log('Connected to location tracking Socket.IO');
@@ -2160,11 +2193,10 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
           isSidebarCollapsed={props.isSidebarCollapsed}
           setIsSidebarCollapsed={props.setIsSidebarCollapsed}
           toggleFavorite={(location: string) => {
-            props.setFavorites((prev: string[]) => {
-              prev.includes(location) 
-                ? prev.filter(fav => fav !== location) 
-                : [...prev, location]
-            });
+            const newFavorites = props.favorites.includes(location) 
+              ? props.favorites.filter(fav => fav !== location) 
+              : [...props.favorites, location];
+            props.setFavorites(newFavorites);
           }}
           // Navigation features
           isNavigating={props.isNavigating}
@@ -2192,7 +2224,7 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
           setCustomMarkers={props.setCustomMarkers}
           weatherData={weatherData}
           isWeatherLoading={isWeatherLoading}
-          fetchWeatherData={fetchWeatherData}
+          fetchWeatherData={() => {}}
         />
       </div>
     </div>

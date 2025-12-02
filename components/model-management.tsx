@@ -1,22 +1,12 @@
 "use client"
 
-import { useState, useEffect, use } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Cpu, Plus, Settings, Trash2, Activity, Zap, Search, Loader2, Edit } from "lucide-react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { apiClient } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 import { ModelEditForm } from "@/components/model-edit-form"
@@ -122,58 +112,52 @@ export function ModelManagement() {
     try {
       setLoading(true)
       const response = await apiClient.getModels()
-      
       if (response.success && response.data) {
-        // Transform the data to match our interface
-        const transformedModels = response.data.data.map((model: any) => {
-          // Determine provider based on the model structure
-          let provider = "unknown"
-          let status: "active" | "inactive" = "active"
-          let type = "chat"
-          let requests = 0
-          let latency = "0ms"
+        // Check if response.data is an array directly or has a data property
+        const modelsData = Array.isArray(response.data) 
+          ? response.data 
+          : (response.data as any).data || response.data;
+        
+        if (Array.isArray(modelsData)) {
+          // Transform the data to match our interface
+          const transformedModels = modelsData.map((model: any) => {
+            // Determine provider based on the model structure
+            let provider = "unknown"
+            let status: "active" | "inactive" = "active"
+            let type = "chat"
+            let requests = 0
+            let latency = "0ms"
+            
+            if (model.ollama) {
+              provider = "ollama"
+              type = "text-generation"
+              // Use model-specific data if available, otherwise default values
+              requests = model.requests || model.ollama.requests || 0
+              latency = model.latency || model.ollama.latency || "0ms"
+            } else if (model.arena) {
+              provider = "arena"
+              type = "arena"
+              requests = model.requests || 0
+              latency = model.latency || "0ms"
+            } else if (model.owned_by === "openai") {
+              provider = "openai"
+              type = "text-generation"
+              requests = model.requests || 0
+              latency = model.latency || "0ms"
+            }
+            
+            return {
+              ...model,
+              provider,
+              status,
+              type,
+              requests,
+              latency,
+            }
+          })
           
-          if (model.ollama) {
-            provider = "ollama"
-            type = "text-generation"
-            // Use model-specific data if available, otherwise default values
-            requests = model.requests || model.ollama.requests || 0
-            latency = model.latency || model.ollama.latency || "0ms"
-          } else if (model.arena) {
-            provider = "arena"
-            type = "arena"
-            requests = model.requests || 0
-            latency = model.latency || "0ms"
-          } else if (model.owned_by === "openai") {
-            provider = "openai"
-            type = "text-generation"
-            requests = model.requests || 0
-            latency = model.latency || "0ms"
-          }
-          
-          return {
-            ...model,
-            provider,
-            status,
-            type,
-            requests,
-            latency,
-            is_active: model.is_active !== undefined ? model.is_active : true, // Default to true if not specified
-            user_id: model.user_id || "system",
-            params: model.params || {},
-            meta: model.meta || {},
-            access_control: model.access_control || null,
-            updated_at: model.updated_at || model.created,
-            created_at: model.created_at || model.created,
-          }
-        })
-        setModels(transformedModels.filter((model:any)=>!model.arena))
-      } else {
-        toast({
-          title: "Error",
-          description: response.error || "Failed to fetch models",
-          variant: "destructive",
-        })
+          setModels(transformedModels)
+        }
       }
     } catch (error) {
       toast({

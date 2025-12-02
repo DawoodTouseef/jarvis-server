@@ -26,16 +26,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       // Verify token is still valid by making a simple API call
       try {
         const response = await apiClient.getSessionUser()
-        if (response.success) {
+        if (response.success && response.data) {
           setIsAuthenticated(true)
         } else {
           // Token is invalid, redirect to login
           localStorage.removeItem("authToken")
+          apiClient.setToken(null)
           router.push("/auth/login")
         }
       } catch (error) {
         // Error occurred, redirect to login
         localStorage.removeItem("authToken")
+        apiClient.setToken(null)
         router.push("/auth/login")
       } finally {
         setIsLoading(false)

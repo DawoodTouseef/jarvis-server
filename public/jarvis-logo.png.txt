@@ -1,0 +1,16 @@
+This is a placeholder for the PNG version of the JARVIS logo. In a real implementation, this would be a rendered PNG file of the SVG logo.
+The SVG logo features:
+- A dark background with a radial gradient
+- A hexagonal shape representing AI/core intelligence with a neon blue-purple glow
+- An inner circle representing connectivity/data
+- Neon glowing text spelling "JARVIS"
+- Small particle effects around the logo
+- Cyberpunk/futuristic aesthetic with glassmorphism elements
+
+For production use, the SVG should be rendered to PNG at multiple resolutions:
+- 16x16 for favicons
+- 32x32 for small icons
+- 64x64 for medium icons
+- 128x128 for larger displays
+- 256x256 for high-resolution displays
+- 512x512 for app icons

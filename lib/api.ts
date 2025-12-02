@@ -21,6 +21,13 @@ interface CustomMetric {
   timestamp: number
 }
 
+interface EntityStateMetrics {
+  total_entities: number
+  active_entities: number
+  domains: Record<string, number>
+  recent_state_changes: number
+}
+
 interface ApiResponse<T> {
   success: boolean
   data?: T
@@ -466,6 +473,68 @@ interface HomeAssistantAddon {
   installed_from: string | null
 }
 
+// Enhanced Dashboard Interfaces
+interface ModelPerformanceMetrics {
+  id: string;
+  name: string;
+  provider: string;
+  requests: number;
+  avg_latency: number;
+  success_rate: number;
+  error_rate: number;
+  throughput: number;
+  last_updated: string;
+}
+
+interface ContainerResourceUsage {
+  id: string;
+  name: string;
+  cpu_usage: number;
+  memory_usage: number;
+  disk_usage: number;
+  network_io: number;
+  status: string;
+  uptime: string;
+}
+
+interface SecurityMetric {
+  id: string;
+  name: string;
+  status: string;
+  value: number;
+  target: number;
+  last_checked: string;
+  description: string;
+}
+
+interface EndpointMetrics {
+  id: string;
+  name: string;
+  method: string;
+  path: string;
+  status: string;
+  response_time: number;
+  uptime: number;
+  requests_per_minute: number;
+  error_rate: number;
+  last_checked: string;
+}
+
+interface PerformanceDataPoint {
+  time: string;
+  latency: number;
+  requests: number;
+  errors: number;
+}
+
+interface ResourceUsageDataPoint {
+  time: string;
+  cpu: number;
+  memory: number;
+  disk: number;
+  network: number;
+}
+
 // Define the signup response interface
 export interface SignupResponse {
   token: string;
@@ -682,6 +751,10 @@ export default class ApiClient {
 
   async getCustomMetrics(): Promise<ApiResponse<CustomMetric[]>> {
     return this._rateLimitedRequest<CustomMetric[]>("/api/v1/analytics/custom");
+  }
+
+  async getEntityStateMetrics(): Promise<ApiResponse<EntityStateMetrics>> {
+    return this._rateLimitedRequest<EntityStateMetrics>("/api/v1/analytics/entities");
   }
 
   // Container Management
@@ -1888,9 +1961,67 @@ export default class ApiClient {
     });
   }
 
+  // Enhanced Dashboard Methods
+  async getModelPerformanceMetrics(): Promise<ApiResponse<ModelPerformanceMetrics[]>> {
+    return this.request<ModelPerformanceMetrics[]>("/api/v1/enhanced-dashboard/models/performance", {
+      method: "GET",
+    });
+  }
+
+  async getModelPerformanceHistory(modelId: string, hours: number = 24): Promise<ApiResponse<PerformanceDataPoint[]>> {
+    const params = new URLSearchParams({ hours: hours.toString() });
+    return this.request<PerformanceDataPoint[]>(`/api/v1/enhanced-dashboard/models/performance/${modelId}/history?${params.toString()}`, {
+      method: "GET",
+    });
+  }
+
+  async getResourceUsageMetrics(): Promise<ApiResponse<ContainerResourceUsage[]>> {
+    return this.request<ContainerResourceUsage[]>("/api/v1/enhanced-dashboard/resources/usage", {
+      method: "GET",
+    });
+  }
+
+  async getResourceUsageHistory(hours: number = 24): Promise<ApiResponse<ResourceUsageDataPoint[]>> {
+    const params = new URLSearchParams({ hours: hours.toString() });
+    return this.request<ResourceUsageDataPoint[]>(`/api/v1/enhanced-dashboard/resources/usage/history?${params.toString()}`, {
+      method: "GET",
+    });
+  }
+
+  async getSecurityMetrics(): Promise<ApiResponse<SecurityMetric[]>> {
+    return this.request<SecurityMetric[]>("/api/v1/enhanced-dashboard/security/metrics", {
+      method: "GET",
+    });
+  }
+
+  async getEndpointMonitoringMetrics(): Promise<ApiResponse<EndpointMetrics[]>> {
+    return this.request<EndpointMetrics[]>("/api/v1/enhanced-dashboard/endpoints/monitoring", {
+      method: "GET",
+    });
+  }
+  async getRagConfig(): Promise<ApiResponse<Record<string, any>>> {
+    return this.request<Record<string, any>>("/api/v1/retrieval/config", {
+      method: "GET",
+    });
+  }
+  async updateRagConfig(data: Record<string, any>): Promise<ApiResponse<Record<string, any>>> {
+    return this.request<Record<string, any>>("/api/v1/retrieval/config/update", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export const apiClient = new ApiClient()
+
+// Initialize token from localStorage if available
+if (typeof window !== "undefined") {
+  const token = localStorage.getItem("authToken")
+  if (token) {
+    apiClient.setToken(token)
+  }
+}
+
 export type { 
   ApiResponse, 
   SystemMetrics, 

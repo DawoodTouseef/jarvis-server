@@ -8,6 +8,9 @@ from typing import Dict
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Skip security headers for WebSocket requests
+        if request.scope['type'] == 'websocket':
+            return await call_next(request)
         response = await call_next(request)
         response.headers.update(set_security_headers())
         return response

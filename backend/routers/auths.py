@@ -582,11 +582,13 @@ async def signup(request: Request, response: Response, form_data: SignupForm):
             or not request.app.state.config.ENABLE_LOGIN_FORM
         ):
             if has_users or not ENABLE_INITIAL_ADMIN_SIGNUP:
+                log.warning("Signup is disabled because there are existing users.")
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACCESS_PROHIBITED
                 )
     else:
         if has_users:
+            log.warning("Signup is enabled because there are existing users.")
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACCESS_PROHIBITED
             )

@@ -95,8 +95,10 @@ from backend.routers import (
     scim,
     home_assistant,
     floor_area_subarea,
+    analytics,
+    enhanced_dashboard,
+    containers,
 )
-
 from backend.routers.retrieval import (
     get_embedding_function,
     get_reranking_function,
@@ -538,12 +540,11 @@ print(
             \ \ \     / /  \                  /  \ \ \ \ \  /_/ / /          \ \ \        / /  \            / /  \       /  \ \       /  \ \ \ \ \  /_/ / /    /  \ \       /  \ \   
             /\ \_\   / / /\ \                / /\ \ \ \ \ \ \___\/           /\ \_\      / / /\ \__        / / /\ \__   / /\ \ \     / /\ \ \ \ \ \ \___\/    / /\ \ \     / /\ \ \  
            / /\/_/  / / /\ \ \              / / /\ \_\/ / /  \ \ \          / /\/_/     / / /\ \___\      / / /\ \___\ / / /\ \_\   / / /\ \_\/ / /  \ \ \   / / /\ \_\   / / /\ \_\ 
-  _       / / /    / / /  \ \ \            / / /_/ / /\ \ \   \_\ \        / / /        \ \ \ \/___/      \ \ \ \/___// /_/_ \/_/  / / /_/ / /\ \ \   \_\ \ / /_/_ \/_/  / / /_/ / / 
- /\ \    / / /    / / /___/ /\ \          / / /__\/ /  \ \ \  / / /       / / /          \ \ \             \ \ \     / /____/\    / / /__\/ /  \ \ \  / / // /____/\    / / /__\/ /  
- \ \_\  / / /    / / /_____/ /\ \        / / /_____/    \ \ \/ / /       / / /       _    \ \ \        _    \ \ \   / /\____\/   / / /_____/    \ \ \/ / // /\____\/   / / /_____/   
- / / /_/ / /_   / /_________/\ \ \  _   / / /\ \ \  _    \ \ \/ /_   ___/ / /__  _  /_/\__/ / /_      /_/\__/ / /  / / /______  / / /\ \ \       \ \ \/ // / /______  / / /\ \ \     
-/ / /__\/ //\_\/ / /_       __\ \_\/\_\/ / /  \ \ \/\_\   \ \  //\_\/\__\/_/___\/\_\\ \/___/ //\_\    \ \/___/ /  / / /_______\/ / /  \ \ \       \ \  // / /_______\/ / /  \ \ \    
-\/_______/ \/_/\_\___\     /____/_/\/_/\/_/    \_\/\/_/    \_\/ \/_/\/_________/\/_/ \_____\/ \/_/     \_____\/   \/__________/\/_/    \_\/        \_\/ \/__________/\/_/    \_\/    
+  _       / / /    / / /  \ \ \            / / /_/ / /\ \ \   \_\ \        / / /        \ \ \ \/___/      \ \ \     / /____/\    / / /_____/    \ \ \/ / // /____/\    / / /_____/ 
+ /\ \    / / /    / / /___/ /\ \          / / /__\/ /  \ \ \  / / /       / / /          \ \ \             \ \ \   / /\____\/   / / /_____/    \ \ \  / / /\____\/   / / /__\/ /  
+ \ \_\  / / /    / / /_____/ /\ \        / / /_____/    \ \ \/ /_   ___/ / /__  _  /_/\__/ / /_      _    \ \ \  / / /______  / / /\ \ \       \ \ \/ // / /______  / / /\ \ \     
+ / / /_/ / /_   / /_________/\ \ \  _   / / /\ \ \  _    \ \ \/ \/_\/\__\/_/___\/\_\\ \/___/ //\_\    \ \/___/ /  / / /_______\/ / /  \ \ \       \ \  // / /_______\/ / /  \ \ \    
+/ / /__\/ //\_\/ / /_       __\ \_\/\_\/ / /  \ \ \/\_\   \ \  //\_\/\__\/_________/\/_/ \_____\/ \/_/     \_____\/   \/__________/\/_/    \_\/        \_\/ \/__________/\/_/    \_\/    
                                                                                                                                                                                      
 
 v{VERSION} - building the best AI Server.
@@ -617,12 +618,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Open WebUI",
+    title="J.A.R.V.I.S. AI Server",
     docs_url="/docs" if ENV == "dev" else None,
     openapi_url="/openapi.json" if ENV == "dev" else None,
     redoc_url=None,
     lifespan=lifespan,
 )
+
+# Mount WebSocket app first to avoid conflicts with middleware
+app.mount("/ws", socket_app)
 
 # For Open WebUI OIDC/OAuth2
 oauth_manager = OAuthManager(app)
@@ -1231,8 +1235,9 @@ class RedirectMiddleware(BaseHTTPMiddleware):
 
 
 # Add the middleware to the app
-if ENABLE_COMPRESSION_MIDDLEWARE:
-    app.add_middleware(CompressMiddleware)
+# Temporarily disable CompressMiddleware for WebSocket compatibility
+# if ENABLE_COMPRESSION_MIDDLEWARE:
+#     app.add_middleware(CompressMiddleware)
 
 app.add_middleware(RedirectMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -1240,6 +1245,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 @app.middleware("http")
 async def commit_session_after_request(request: Request, call_next):
+    # Skip session commit for WebSocket requests
+    if request.scope['type'] == 'websocket':
+        return await call_next(request)
     response = await call_next(request)
     # log.debug("Commit session after request")
     Session.commit()
@@ -1248,6 +1256,9 @@ async def commit_session_after_request(request: Request, call_next):
 
 @app.middleware("http")
 async def check_url(request: Request, call_next):
+    # Skip URL checking for WebSocket requests
+    if request.scope['type'] == 'websocket':
+        return await call_next(request)
     start_time = int(time.time())
     request.state.token = get_http_authorization_cred(
         request.headers.get("Authorization")
@@ -1262,32 +1273,29 @@ async def check_url(request: Request, call_next):
 
 @app.middleware("http")
 async def inspect_websocket(request: Request, call_next):
-    if (
-        "/ws" in request.url.path
-        and request.query_params.get("transport") == "websocket"
-    ):
-        upgrade = (request.headers.get("Upgrade") or "").lower()
-        connection = (request.headers.get("Connection") or "").lower().split(",")
-        # Check that there's the correct headers for an upgrade, else reject the connection
-        # This is to work around this upstream issue: https://github.com/miguelgrinberg/python-engineio/issues/367
-        if upgrade != "websocket" or "upgrade" not in connection:
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={"detail": "Invalid WebSocket upgrade request"},
-            )
+    # Completely bypass all middleware processing for WebSocket paths
+    if request.url.path.startswith("/ws/"):
+        return await call_next(request)
     return await call_next(request)
 
 
+# Custom CORSMiddleware wrapper to skip WebSocket requests
+class WebSocketAwareCORSMiddleware(CORSMiddleware):
+        async def __call__(self, scope, receive, send):
+            if scope['type'] == 'websocket':
+                # Skip CORS middleware for WebSocket requests
+                return await self.app(scope, receive, send)
+            return await super().__call__(scope, receive, send)
+
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ALLOW_ORIGIN,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-app.mount("/ws", socket_app)
+        WebSocketAwareCORSMiddleware,
+        allow_origins=CORS_ALLOW_ORIGIN,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        # Exclude WebSocket paths from CORS middleware
+        expose_headers=["Access-Control-Allow-Origin"],
+    )
 
 
 app.include_router(ollama.router, prefix="/ollama", tags=["ollama"])
@@ -1334,6 +1342,15 @@ if SCIM_ENABLED:
 # Home Assistant API
 app.include_router(home_assistant.router, prefix="/api/v1/homeassistant", tags=["HomeAssistant"])
 app.include_router(floor_area_subarea.router, prefix="/api/v1/floor-area-subarea", tags=["FloorAreaSubArea"])
+
+# Analytics API
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
+
+# Enhanced Dashboard API
+app.include_router(enhanced_dashboard.router, prefix="/api/v1/enhanced-dashboard", tags=["EnhancedDashboard"])
+
+# Container Management API
+app.include_router(containers.router, prefix="/api/v1/containers", tags=["Containers"])
 
 
 try:
@@ -1975,9 +1992,25 @@ try:
             prefix=(f"{REDIS_KEY_PREFIX}:session:" if REDIS_KEY_PREFIX else "session:"),
         )
 
-        app.add_middleware(SessionAutoloadMiddleware)
+        # Custom SessionAutoloadMiddleware wrapper to skip WebSocket requests
+        class WebSocketAwareSessionAutoloadMiddleware(SessionAutoloadMiddleware):
+            async def __call__(self, scope, receive, send):
+                if scope['type'] == 'websocket':
+                    # Skip session autoload middleware for WebSocket requests
+                    return await self.app(scope, receive, send)
+                return await super().__call__(scope, receive, send)
+        
+        # Custom StarSessionsMiddleware wrapper to skip WebSocket requests
+        class WebSocketAwareStarSessionsMiddleware(StarSessionsMiddleware):
+            async def __call__(self, scope, receive, send):
+                if scope['type'] == 'websocket':
+                    # Skip session middleware for WebSocket requests
+                    return await self.app(scope, receive, send)
+                return await super().__call__(scope, receive, send)
+        
+        app.add_middleware(WebSocketAwareSessionAutoloadMiddleware)
         app.add_middleware(
-            StarSessionsMiddleware,
+            WebSocketAwareStarSessionsMiddleware,
             store=redis_session_store,
             cookie_name="owui-session",
             cookie_same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
@@ -1987,8 +2020,16 @@ try:
     else:
         raise ValueError("No Redis URL provided")
 except Exception as e:
+    # Custom SessionMiddleware wrapper to skip WebSocket requests
+    class WebSocketAwareSessionMiddleware(SessionMiddleware):
+        async def __call__(self, scope, receive, send):
+            if scope['type'] == 'websocket':
+                # Skip session middleware for WebSocket requests
+                return await self.app(scope, receive, send)
+            return await super().__call__(scope, receive, send)
+    
     app.add_middleware(
-        SessionMiddleware,
+        WebSocketAwareSessionMiddleware,
         secret_key=WEBUI_SECRET_KEY,
         session_cookie="owui-session",
         same_site=WEBUI_SESSION_COOKIE_SAME_SITE,

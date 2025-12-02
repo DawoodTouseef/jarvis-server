@@ -6,12 +6,16 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { User, Bell, Shield,  Save, Upload,Settings,Lock ,Copy,EyeOff,Eye,AudioLines,Download ,Home, Plus, Edit, Trash2, Building, MapPin, Layers, Heart, Camera } from "lucide-react"
+import { User, Bell, Shield,  Save, Upload,Settings,Lock ,Copy,EyeOff,Eye,AudioLines,Download ,Home, Plus, Edit, Trash2, Building, MapPin, Layers, Heart, Camera,
+  Earth
+ } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { apiClient } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 import { UserList } from "./Userlist"
+import { Slider } from "./ui/slider"
+import { Switch } from "./ui/switch"
 
 interface User{
     id?: string,
@@ -123,6 +127,33 @@ export function SettingsPanel() {
   const [hideapi, setHideApiKey]= useState(true);
   const [copySuccess, setCopySuccess] = useState('');
   const [sttengine, setSttEngine]=useState("whisper");
+  let webSearchEngines = [
+		'ollama_cloud',
+		'perplexity_search',
+		'searxng',
+		'yacy',
+		'google_pse',
+		'brave',
+		'kagi',
+		'mojeek',
+		'bocha',
+		'serpstack',
+		'serper',
+		'serply',
+		'searchapi',
+		'serpapi',
+		'duckduckgo',
+		'tavily',
+		'jina',
+		'bing',
+		'exa',
+		'perplexity',
+		'sougou',
+		'firecrawl',
+		'external'
+	];
+	let webLoaderEngines = ['playwright', 'firecrawl', 'tavily', 'external'];
+  const [websearchEngine, setWebsearchEngine]=useState("*");
   const [ttsengine, setTtsEngine]=useState("");
   const [settings, setSettings] = useState({
     // Profile
@@ -142,12 +173,14 @@ export function SettingsPanel() {
     animations: true,
   })
   const [allusers, setAllUsers] = useState<UserTableItem[]>([]);
-
+  const [isWebsearchEnabled, setWebsearchEnabled] = useState(false);
+  const [byPassEmbedding, setByPassEmbedding] = useState(false);
   // Home structure state
   const [floors, setFloors] = useState<HomeFloor[]>([])
   const [areas, setAreas] = useState<HomeArea[]>([])
   const [subAreas, setSubAreas] = useState<HomeSubArea[]>([])
-  
+  const [ragconfig, setRagConfig] = useState<any>({});
+  const [webconfig, setWebConfig] = useState<any>({});
   // Dialog states
   const [isAddFloorDialogOpen, setIsAddFloorDialogOpen] = useState(false);
   const [isAddAreaDialogOpen, setIsAddAreaDialogOpen] = useState(false);
@@ -193,7 +226,19 @@ export function SettingsPanel() {
       }
       fetchAllUsers();
       fetchUsers()
-      
+      const fetchRagConfig = async () => { 
+        try {
+          const response = await apiClient.getRagConfig();
+          if (response.success && response.data) {
+            setRagConfig(response.data);
+            setWebsearchEnabled(response.data.web?.ENABLE_WEB_SEARCH)
+            setWebConfig(response.data.web)
+          }
+        } catch (error) {
+          console.error("Error fetching Rag config:", error);
+        }
+      }
+      fetchRagConfig();
       const fetchaudioconfig = async () => { 
         try { 
           const response = await apiClient.getAudioConfig();
@@ -702,34 +747,39 @@ export function SettingsPanel() {
       console.error("Error updating audio config:", error);
     }
   }
-  
-  const handleUpdateHome = async ()=>{ 
+  const handleupdateRagConfig = async ()=>{ 
     try {
-      const response = await apiClient.updateConfig({}); // Placeholder for actual home update
-      if (response.success) {
+      const updatedConfig = {
+        ...ragconfig,
+        web: {
+          ...webconfig,
+        }
+      };
+      setRagConfig(updatedConfig);
+      const response = await apiClient.updateRagConfig(updatedConfig);
+      if (response.data) {
         toast({
           title: "Success",
-          description: "Home configuration updated successfully",
+          description: "Rag configuration updated successfully",
         });
-        console.log("Home updated successfully");
+        console.log("Rag config updated successfully");
       } else {
         toast({
           title: "Error",
-          description: response.error || "Failed to update home configuration",
+          description: response.error || "Failed to update rag configuration",
           variant: "destructive",
         });
-        console.error("Failed to update home:", response.error);
+        console.error("Failed to update rag  config:", response.error);
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to update home configuration",
+        description: "Failed to update rag configuration",
         variant: "destructive",
       });
-      console.error("Error updating home:", error);
+      console.error("Error updating rag config:", error);
     }
   }
-  
   // Render icon component dynamically
   const renderIcon = (iconName: string, size: number = 16) => {
     // Check if the icon exists in our IconMap
@@ -741,7 +791,6 @@ export function SettingsPanel() {
     // Fallback to MapPin if icon not found
     return <MapPin className={`w-${size/4} h-${size/4}`} />;
   };
-  
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -771,10 +820,16 @@ export function SettingsPanel() {
             Home
           </TabsTrigger>
           {user.role==='admin' && (
+            <>
             <TabsTrigger value="users" className="data-[state=active]:bg-primary/20">
             <User className="w-4 h-4 mr-2" />
             Users
           </TabsTrigger>
+          <TabsTrigger value="websearch" className="data-[state=active]:bg-primary/20">
+            <Earth className="w-4 h-4 mr-2" />
+            Web Search
+          </TabsTrigger>
+            </>
           )}
         </TabsList>
 
@@ -1736,6 +1791,323 @@ export function SettingsPanel() {
 
         <TabsContent value="users" className="space-y-6">
             <UserList/>
+        </TabsContent>
+        {/* Web Search Tab */}
+        <TabsContent value="websearch" className="space-y-6">
+          <Card className="glass border-primary/20 p-6">
+            <h2 className="text-xl font-semibold mb-6">Web Search Configuration</h2>
+            
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="websearch-toggle">Enable Web Search</Label>
+                  <Switch 
+                    id="websearch-toggle"
+                    checked={isWebsearchEnabled} 
+                    onCheckedChange={setWebsearchEnabled}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Web Search Engine</Label>
+                  <Select 
+                    value={websearchEngine || "searxng"} 
+                    onValueChange={setWebsearchEngine}
+                  >
+                    <SelectTrigger className="glass border-primary/20">
+                      <SelectValue placeholder="Select Engine" />
+                    </SelectTrigger>
+                    <SelectContent className="glass-strong border-primary/20">
+
+                      <SelectItem value="*">Select the Engine</SelectItem>
+                      {webSearchEngines.map((engine) => (
+                        <SelectItem key={engine} value={engine}>
+                          {engine.charAt(0).toUpperCase() + engine.slice(1).replace(/_/g, ' ')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Select which search engine to use for web searches
+                  </p>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="bypass-toggle">Bypass Embedding and Retrieval</Label>
+                  <Switch 
+                    id="bypass-toggle"
+                    checked={byPassEmbedding} 
+                    onCheckedChange={setByPassEmbedding}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enable to inject entire content as context for comprehensive processing (recommended for complex queries)
+                </p>
+              </div>
+              
+              {websearchEngine!=="*" && (
+                <div className="pt-4">
+                <h3 className="text-lg font-medium mb-4">Engine Specific Settings</h3>
+                <hr className="border-primary/20 mb-4"/>
+                {websearchEngine === "ollama_cloud" && (
+                  <>
+                  <div className="mb-2.5 flex w-full flex-col">
+								<div>
+									<div className=" self-center text-xs font-medium mb-1">
+										<Label>Ollama Cloud API Key</Label>
+									</div>
+
+									<div className="flex w-full">
+										<div className="flex items-center space-y-2 justify-between">
+											<Input
+												placeholder={'Enter Ollama Cloud API Key'}
+												onChange={(e) => setWebConfig({ ...webconfig, OLLAMA_CLOUD_WEB_SEARCH_API_KEY: e.target.value })}
+                        type={hideapi ? "password" : "text"}
+                        about="Enter Ollama Cloud API Key"
+											/>
+                      <Button onClick={() => setHideApiKey(!hideapi)}>{hideapi ? <Eye/> : <EyeOff/>}</Button>
+										</div>
+									</div>
+								</div>
+							</div>
+                  </>
+                )}
+                {websearchEngine === "searxng" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Searxng Query URL</Label>
+                      <Input 
+                        placeholder="Enter Searxng Query URL"
+                        value={webconfig.SEARXNG_QUERY_URL || ""}
+                        onChange={(e) => setWebConfig({
+                          
+                            ...webconfig,
+                            SEARXNG_QUERY_URL: e.target.value
+                      
+                        })}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {websearchEngine === "google_pse" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Google PSE API Key</Label>
+                      <Input 
+                        type={hideapi ? "password" : "text"}
+                        placeholder="Enter Google PSE API Key"
+                        value={ragconfig.web?.GOOGLE_PSE_API_KEY || ""}
+                        onChange={(e) => setRagConfig({
+                          ...ragconfig,
+                          web: {
+                            ...ragconfig.web,
+                            GOOGLE_PSE_API_KEY: e.target.value
+                          }
+                        })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Google PSE Engine ID</Label>
+                      <Input 
+                        placeholder="Enter Google PSE Engine ID"
+                        value={ragconfig.web?.GOOGLE_PSE_ENGINE_ID || ""}
+                        onChange={(e) => setRagConfig({
+                          ...ragconfig,
+                          web: {
+                            ...ragconfig.web,
+                            GOOGLE_PSE_ENGINE_ID: e.target.value
+                          }
+                        })}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {websearchEngine === "brave" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Brave Search API Key</Label>
+                      <Input 
+                        type={hideapi ? "password" : "text"}
+                        placeholder="Enter Brave Search API Key"
+                        value={ragconfig.web?.BRAVE_SEARCH_API_KEY || ""}
+                        onChange={(e) => setRagConfig({
+                          ...ragconfig,
+                          web: {
+                            ...ragconfig.web,
+                            BRAVE_SEARCH_API_KEY: e.target.value
+                          }
+                        })}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {websearchEngine === "tavily" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Tavily API Key</Label>
+                      <Input 
+                        type={hideapi ? "password" : "text"}
+                        placeholder="Enter Tavily API Key"
+                        value={ragconfig.web?.TAVILY_API_KEY || ""}
+                        onChange={(e) => setRagConfig({
+                          ...ragconfig,
+                          web: {
+                            ...ragconfig.web,
+                            TAVILY_API_KEY: e.target.value
+                          }
+                        })}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {websearchEngine === "bing" && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Bing Search V7 Endpoint</Label>
+                      <Input 
+                        placeholder="Enter Bing Search V7 Endpoint"
+                        value={ragconfig.web?.BING_SEARCH_V7_ENDPOINT || ""}
+                        onChange={(e) => setRagConfig({
+                          ...ragconfig,
+                          web: {
+                            ...ragconfig.web,
+                            BING_SEARCH_V7_ENDPOINT: e.target.value
+                          }
+                        })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Bing Search V7 Subscription Key</Label>
+                      <Input 
+                        type={hideapi ? "password" : "text"}
+                        placeholder="Enter Bing Search V7 Subscription Key"
+                        value={ragconfig.web?.BING_SEARCH_V7_SUBSCRIPTION_KEY || ""}
+                        onChange={(e) => setRagConfig({
+                          ...ragconfig,
+                          web: {
+                            ...ragconfig.web,
+                            BING_SEARCH_V7_SUBSCRIPTION_KEY: e.target.value
+                          }
+                        })}
+                      />
+                    </div>
+                  </div>
+                )}
+                {websearchEngine === 'perplexity_search' &&
+              <>
+              <div className="mb-2.5 flex w-full flex-col">
+								<div>
+									<div className=" self-center text-xs font-medium mb-1">
+										<Label>Perplexity Search API URL</Label>
+									</div>
+
+									<div className="flex w-full">
+										<div className="flex-1">
+											<Input
+												type="text"
+												placeholder='Enter Perplexity Search API URL'
+												value={webconfig.PERPLEXITY_SEARCH_API_URL}
+												autoComplete="off"
+                        onChange={(e) => setWebConfig({
+                          ...webconfig,
+                          PERPLEXITY_SEARCH_API_URL: e.target.value
+                        })}
+											/>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div className="mb-2.5 flex w-full flex-col">
+								<div>
+									<div className=" self-center text-xs font-medium mb-1">
+										<Label>Perplexity API Key</Label>
+									</div>
+
+									<div className="flex w-full">
+										<div className="flex items-center space-y-2 justify-between">
+									
+
+                        <Input type={hideapi ? "password" : "text"}
+												placeholder='Enter Perplexity API Key'
+												value={webconfig.PERPLEXITY_API_KEY}
+												onChange={(e) => setWebConfig({
+													...webconfig,
+													PERPLEXITY_API_KEY: e.target.value
+												})}
+											/>
+											<Button onClick={() => setHideApiKey(!hideapi)}>{hideapi ? <Eye/> : <EyeOff/>}</Button>
+										</div>
+									</div>
+								</div>
+							</div>
+              
+              </>
+}
+              </div>
+              )}
+              {isWebsearchEnabled && (
+              <>
+              <div className="pt-4">
+                <h3 className="text-lg font-medium mb-4">Advanced Settings</h3>
+                <hr className="border-primary/20 mb-4"/>
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Search Result Count</Label>
+                    <Input 
+                      type="number"
+                      placeholder="Enter number of search results to return"
+                      value={ragconfig.web?.WEB_SEARCH_RESULT_COUNT || ""}
+                      onChange={(e) => setRagConfig({
+                        ...ragconfig,
+                        web: {
+                          ...ragconfig.web,
+                          WEB_SEARCH_RESULT_COUNT: e.target.value
+                        }
+                      })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Number of search results to include in the context
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Domain Filter List</Label>
+                    <Input 
+                      placeholder="Enter domains separated by commas (e.g., example.com,site.org,!excludedsite.com)"
+                      value={ragconfig.web?.WEB_SEARCH_DOMAIN_FILTER_LIST || ""}
+                      onChange={(e) => setRagConfig({
+                        ...ragconfig,
+                        web: {
+                          ...ragconfig.web,
+                          WEB_SEARCH_DOMAIN_FILTER_LIST: e.target.value
+                        }
+                      })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Include or exclude specific domains from search results
+                    </p>
+                  </div>
+                </div>
+              </div>
+              </>
+              )}
+            </div>
+            
+            <div className="flex justify-end mt-6">
+              <Button onClick={handleupdateRagConfig} className="neon-glow">
+                <Save className="w-4 h-4 mr-2" />
+                Save Changes
+              </Button>
+            </div>
+          </Card>
         </TabsContent>
       </Tabs>
       

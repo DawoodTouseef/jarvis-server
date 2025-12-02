@@ -132,11 +132,11 @@ export function PipelineSystem() {
             console.log("Pipeline Data:", response.data);
             // The response data should contain the pipeline models directly
             if (Array.isArray(response.data)) {
-              setModels(response.data.data);
+              setModels(prev => [...prev, ...(Array.isArray(response.data) ? response.data : [response.data])]);
               
             } else if (response.data && typeof response.data === 'object') {
-              // If it's a single object, wrap it in an array
-              setModels([response.data.data]);
+              // If it's a single object, add it to the array
+              setModels(prev => [...prev, response.data]);
             }
           }
         }
@@ -171,27 +171,27 @@ export function PipelineSystem() {
 
   const deletePipeline = async (id: string, urlIdx: number) => {
     try {
-
-      const response = await apiClient.deletePipeline(id, urlIdx)
+      const response = await apiClient.deletePipeline(id, urlIdx);
       if (response.success) {
-        setModels((prev) => prev.filter((model) => model.id !== id))
+        setModels((prev) => prev.filter((model) => model.id !== id));
+        setPipelines((prev) => prev.filter((pipeline) => pipeline.id !== id));
         toast({
           title: "Success",
           description: "Pipeline deleted successfully",
-        })
+        });
       } else {
         toast({
           title: "Error",
           description: typeof response.error === 'object' ? JSON.stringify(response.error) : response.error || "Failed to delete pipeline",
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to delete pipeline: " + (error instanceof Error ? error.message : typeof error === 'object' ? JSON.stringify(error) : "Unknown error"),
         variant: "destructive",
-      })
+      });
     }
   }
 
@@ -302,7 +302,7 @@ export function PipelineSystem() {
       } else {
         toast({
           title: "Error",
-          description: response.error.msg || "Failed to update pipeline",
+          description: (typeof response.error === 'string' ? response.error : JSON.stringify(response.error)) || "Failed to update pipeline",
           variant: "destructive",
         })
       }
@@ -359,7 +359,7 @@ export function PipelineSystem() {
               </div>
               <div className="flex-1 min-w-0">
 <h3 className="font-semibold text-lg mb-1">
-  {model.id.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}
+  {model.id.replace(/_/g, ' ').replace(/\b\w/g, (char: string) => char.toUpperCase())}
 </h3>
                 <p className="text-sm text-muted-foreground">{model.name}</p>
               </div>
@@ -379,7 +379,12 @@ export function PipelineSystem() {
                 size="sm"
                 variant="outline"
                 className="glass border-destructive/30 text-destructive hover:bg-destructive/10 bg-transparent"
-                onClick={() => deletePipeline(model.id, 1)}
+                onClick={() => {
+                  // Find the urlIdx for this pipeline
+                  const pipelineInfo = PIPELINE_LIST.find((p: any) => p.id === model.id);
+                  const urlIdx = pipelineInfo ? pipelineInfo.idx : 0;
+                  deletePipeline(model.id, urlIdx);
+                }}
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
@@ -566,7 +571,7 @@ export function PipelineSystem() {
 
       {/* Pipelines Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {models.map((model) => modelGrid(model))}
+        {Array.isArray(models) && models.map((model) => modelGrid([model]))}
       </div>
 
       {/* Edit Pipeline Dialog */}

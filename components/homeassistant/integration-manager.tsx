@@ -174,7 +174,7 @@ export default function IntegrationManager() {
     
     // Create new Socket.IO connection
     const socket = io('http://localhost:8080', {
-      path: '/api/ws/integrations/flow',
+      path: '/ws',
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,

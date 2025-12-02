@@ -4,17 +4,54 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Sparkles, Cpu, Database, Zap } from "lucide-react"
+import { apiClient } from "@/lib/api"
 
 export default function HomePage() {
   const router = useRouter()
 
- useEffect(() => {
-    if (localStorage.getItem("isAuthenticated") === "true") {
-      router.push("/dashboard")
+  useEffect(() => {
+    const checkAuth = async () => {
+      // Check for auth token in localStorage first (for "Remember me" users)
+      let token = localStorage.getItem("authToken")
+      
+      // If not found in localStorage, check sessionStorage
+      if (!token) {
+        token = sessionStorage.getItem("authToken")
+      }
+      
+      // If we have a token, verify it's still valid
+      if (token) {
+        try {
+          apiClient.setToken(token)
+          const response = await apiClient.getSessionUser()
+          if (response.success && response.data) {
+            router.push("/dashboard")
+          } else {
+            // Token is invalid, clean up
+            localStorage.removeItem("authToken")
+            localStorage.removeItem("isAuthenticated")
+            localStorage.removeItem("userEmail")
+            sessionStorage.removeItem("authToken")
+            sessionStorage.removeItem("isAuthenticated")
+            sessionStorage.removeItem("userEmail")
+            apiClient.setToken(null)
+          }
+        } catch (error) {
+          // Error occurred, clean up
+          localStorage.removeItem("authToken")
+          localStorage.removeItem("isAuthenticated")
+          localStorage.removeItem("userEmail")
+          sessionStorage.removeItem("authToken")
+          sessionStorage.removeItem("isAuthenticated")
+          sessionStorage.removeItem("userEmail")
+          apiClient.setToken(null)
+        }
+      }
     }
     
-    
+    checkAuth()
   }, [router])
+  
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
       {/* Grid pattern overlay */}
@@ -24,7 +61,28 @@ export default function HomePage() {
         {/* Logo/Title */}
         <div className="space-y-4">
           <div className="inline-flex items-center gap-3 px-6 py-3 glass rounded-full border border-primary/30 mb-6">
-            <Sparkles className="w-5 h-5 text-primary" />
+            <div className="w-5 h-5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00c8ff" />
+                    <stop offset="50%" stop-color="#0088ff" />
+                    <stop offset="100%" stop-color="#8040ff" />
+                  </linearGradient>
+                  <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+                    <feFlood flood-color="#00c8ff" flood-opacity="0.8" result="color"/>
+                    <feComposite in="color" in2="blur" operator="in" result="glow"/>
+                    <feMerge>
+                      <feMergeNode in="glow"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                </defs>
+                <polygon points="50,25 70,37.5 70,62.5 50,75 30,62.5 30,37.5" fill="none" stroke="url(#neonGradient)" stroke-width="2" filter="url(#neonGlow)" />
+                <circle cx="50" cy="50" r="15" fill="none" stroke="url(#neonGradient)" stroke-width="1" />
+              </svg>
+            </div>
             <span className="text-sm font-mono text-primary">Virtual Assistant AI</span>
           </div>
 

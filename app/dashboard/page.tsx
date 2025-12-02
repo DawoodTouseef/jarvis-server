@@ -8,16 +8,22 @@ import {
   MessageSquare,
   Cpu,
   Database,
+  Activity,
+  Server,
+  Users,
+  TrendingUp,
+  Home,
+  Lightbulb,
+  Thermometer,
+  Power,
+  Cloud,
+  Brain,
   Zap,
   ImageIcon,
   Mic,
-  Settings,
-  Activity,
-  TrendingUp,
   ArrowRight,
-  Cloud,
-  Home,
-  Brain
+  Settings,
+  BarChart3
 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
@@ -47,6 +53,8 @@ export default function DashboardPage() {
     { label: "Active Chats", value: 0, change: "+0", icon: MessageSquare, color: "text-primary" },
     { label: "Models", value: 0, change: "+0", icon: Cpu, color: "text-secondary" },
     { label: "Documents", value: 0, change: "+0", icon: Database, color: "text-accent" },
+    { label: "Entities", value: 0, change: "+0", icon: Home, color: "text-info" },
+    { label: "Devices", value: 0, change: "+0", icon: Power, color: "text-warning" },
   ])
 
   const [systemStatus, setSystemStatus] = useState({
@@ -61,27 +69,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   const quickActions = [
-    {
-      title: "Manage Connections",
-      description: "Configure Connections",
-      icon: Cloud,
-      href: "/dashboard/connections",
-      color: "secondary",
-    },
-    {
-      title: "Manage Models",
-      description: "Configure AI models",
-      icon: Cpu,
-      href: "/dashboard/models",
-      color: "secondary",
-    },
-    {
-      title: "Knowledge Base",
-      description: "Upload and manage documents",
-      icon: Database,
-      href: "/dashboard/knowledge",
-      color: "accent",
-    },
     {
       title: "Home Assistant",
       description: "Control smart home devices",
@@ -104,18 +91,11 @@ export default function DashboardPage() {
       color: "chart-4",
     },
     {
-      title: "Generate Image",
-      description: "AI image generation",
-      icon: ImageIcon,
-      href: "/dashboard/images",
-      color: "chart-2",
-    },
-    {
-      title: "Audio Tools",
-      description: "Speech and audio processing",
-      icon: Mic,
-      href: "/dashboard/audio",
-      color: "chart-5",
+      title: "Enhanced Dashboard",
+      description: "Advanced analytics and monitoring",
+      icon: BarChart3,
+      href: "/dashboard/enhanced",
+      color: "primary",
     },
   ]
 
@@ -147,14 +127,16 @@ export default function DashboardPage() {
           knowledgeResponse,
           apiMetricsResponse,
           systemMetricsResponse,
-          chatsResponse
+          chatsResponse,
+          entityMetricsResponse
         ] = await Promise.allSettled([
           apiClient.getUserMetrics(),
           apiClient.getModels(),
           apiClient.getKnowledgeBases(),
           apiClient.getApiRequestMetrics(),
           apiClient.getSystemMetrics(),
-          apiClient.getChats()
+          apiClient.getChats(),
+          apiClient.getEntityStateMetrics()
         ]);
 
         // Initialize updated stats with current values, preserving icons
@@ -162,8 +144,10 @@ export default function DashboardPage() {
           { label: "Active Chats", value: 0, change: "+0", icon: MessageSquare, color: "text-primary" },
           { label: "Models", value: 0, change: "+0", icon: Cpu, color: "text-secondary" },
           { label: "Documents", value: 0, change: "+0", icon: Database, color: "text-accent" },
+          { label: "Entities", value: 0, change: "+0", icon: Home, color: "text-info" },
+          { label: "Devices", value: 0, change: "+0", icon: Power, color: "text-warning" },
         ];
-        
+      
         let hasErrors = false;
 
         // Process user metrics
@@ -211,8 +195,38 @@ export default function DashboardPage() {
           hasErrors = true;
         }
 
+        // Process entity metrics
+        if (entityMetricsResponse.status === "fulfilled" && entityMetricsResponse.value.success && entityMetricsResponse.value.data) {
+          const entityMetrics = entityMetricsResponse.value.data;
+          console.log("Entity metrics data received:", entityMetrics);
+          
+          // Update entities count
+          updatedStats[3] = {
+            ...updatedStats[3],
+            value: entityMetrics.total_entities || 0,
+            change: `+${entityMetrics.recent_state_changes || 0}`
+          };
+          
+          // Count devices (entities with 'switch', 'light', 'sensor' domains)
+          let deviceCount = 0;
+          const deviceDomains = ['switch', 'light', 'sensor', 'binary_sensor', 'cover', 'climate'];
+          Object.entries(entityMetrics.domains || {}).forEach(([domain, count]) => {
+            if (deviceDomains.includes(domain)) {
+              deviceCount += count;
+            }
+          });
+          
+          updatedStats[4] = {
+            ...updatedStats[4],
+            value: deviceCount,
+            change: "+0"
+          };
+        } else {
+          hasErrors = true;
+        }
+
         setStats(updatedStats);
-        
+      
         // Process system metrics
         if (systemMetricsResponse.status === "fulfilled" && systemMetricsResponse.value.success && systemMetricsResponse.value.data) {
           const systemMetrics = systemMetricsResponse.value.data;
@@ -369,7 +383,7 @@ export default function DashboardPage() {
           {/* Stats Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {stats.map((stat, index) => (
-              <Card key={`${stat.label}-${stat.value}`} className="glass border-primary/20 p-6 hover:border-primary/40 transition-all hover:scale-[1.02]">
+              <Card key={index} className="glass border-primary/20 p-6 hover:border-primary/40 transition-all hover:scale-[1.02]">
                 <div className="flex items-start justify-between">
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">{stat.label}</p>

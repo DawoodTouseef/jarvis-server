@@ -96,8 +96,56 @@ export default function DeviceDashboard() {
   const fetchDevices = async () => {
     try {
       setLoading(true);
-      // This would be implemented to fetch devices from the API
-      // For now, we'll use mock data
+      const response = await apiClient.getHomeAssistantDevices();
+      if (response.success && response.data) {
+        setDevices(response.data);
+      } else {
+        setError(response.error || 'Failed to fetch devices');
+        // Fallback to mock data if API fails
+        const mockDevices: Device[] = [
+          {
+            id: 1,
+            config_entries: ["smartthings"],
+            connections: {},
+            identifiers: {"smartthings": "device_1"},
+            manufacturer: "SmartThings",
+            model: "Smart Bulb",
+            name: "Living Room Light",
+            area_id: null,
+            via_device_id: null,
+            serial_number: null,
+            sw_version: null,
+            hw_version: null,
+            configuration_url: null,
+            disabled_by: null,
+            entry_type: null,
+            discovery_method: "smartthings"
+          },
+          {
+            id: 2,
+            config_entries: ["tuya"],
+            connections: {},
+            identifiers: {"tuya": "tuya_device_1"},
+            manufacturer: "Tuya",
+            model: "Smart Plug",
+            name: "Kitchen Smart Plug",
+            area_id: null,
+            via_device_id: null,
+            serial_number: null,
+            sw_version: null,
+            hw_version: null,
+            configuration_url: null,
+            disabled_by: null,
+            entry_type: null,
+            discovery_method: "tuya"
+          }
+        ];
+        setDevices(mockDevices);
+      }
+    } catch (err) {
+      setError('Failed to fetch devices');
+      console.error('Error fetching devices:', err);
+      // Fallback to mock data if API fails
       const mockDevices: Device[] = [
         {
           id: 1,
@@ -137,9 +185,6 @@ export default function DeviceDashboard() {
         }
       ];
       setDevices(mockDevices);
-    } catch (err) {
-      setError('Failed to fetch devices');
-      console.error('Error fetching devices:', err);
     } finally {
       setLoading(false);
     }
@@ -147,8 +192,99 @@ export default function DeviceDashboard() {
 
   const fetchEntities = async () => {
     try {
-      // This would be implemented to fetch entities from the API
-      // For now, we'll use mock data
+      const response = await apiClient.getHomeAssistantEntitiesRegistry();
+      if (response.success && response.data) {
+        setEntities(response.data);
+        
+        // Fetch initial states for all entities
+        const entityIds = response.data.map((entity: Entity) => entity.entity_id);
+        const states: Record<string, EntityState> = {};
+        
+        // Fetch states for each entity
+        for (const entityId of entityIds) {
+          try {
+            const stateResponse = await apiClient.getHomeAssistantEntity(entityId);
+            if (stateResponse.success && stateResponse.data) {
+              states[entityId] = stateResponse.data;
+            }
+          } catch (err) {
+            console.error(`Error fetching state for ${entityId}:`, err);
+          }
+        }
+        
+        setEntityStates(states);
+      } else {
+        setError(response.error || 'Failed to fetch entities');
+        // Fallback to mock data if API fails
+        const mockEntities: Entity[] = [
+          {
+            entity_id: "light.smartthings_device_1",
+            unique_id: "smartthings_device_1",
+            platform: "smartthings",
+            domain: "light",
+            name: "Living Room Light",
+            device_id: "1",
+            area_id: null,
+            icon: null,
+            disabled_by: null,
+            hidden_by: null,
+            entity_category: null,
+            has_entity_name: null,
+            original_name: null,
+            capabilities: null,
+            supported_features: null,
+            device_class: null,
+            unit_of_measurement: null,
+            state_class: null,
+            last_updated: null
+          },
+          {
+            entity_id: "switch.tuya_tuya_device_1",
+            unique_id: "tuya_tuya_device_1",
+            platform: "tuya",
+            domain: "switch",
+            name: "Kitchen Smart Plug",
+            device_id: "2",
+            area_id: null,
+            icon: null,
+            disabled_by: null,
+            hidden_by: null,
+            entity_category: null,
+            has_entity_name: null,
+            original_name: null,
+            capabilities: null,
+            supported_features: null,
+            device_class: null,
+            unit_of_measurement: null,
+            state_class: null,
+            last_updated: null
+          }
+        ];
+        setEntities(mockEntities);
+        
+        // Fetch initial states
+        const mockStates: Record<string, EntityState> = {
+          "light.smartthings_device_1": {
+            entity_id: "light.smartthings_device_1",
+            state: "on",
+            attributes: {brightness: 100},
+            last_changed: new Date().toISOString(),
+            last_updated: new Date().toISOString()
+          },
+          "switch.tuya_tuya_device_1": {
+            entity_id: "switch.tuya_tuya_device_1",
+            state: "off",
+            attributes: {current: "0A"},
+            last_changed: new Date().toISOString(),
+            last_updated: new Date().toISOString()
+          }
+        };
+        setEntityStates(mockStates);
+      }
+    } catch (err) {
+      setError('Failed to fetch entities');
+      console.error('Error fetching entities:', err);
+      // Fallback to mock data if API fails
       const mockEntities: Entity[] = [
         {
           entity_id: "light.smartthings_device_1",
@@ -213,9 +349,6 @@ export default function DeviceDashboard() {
         }
       };
       setEntityStates(mockStates);
-    } catch (err) {
-      setError('Failed to fetch entities');
-      console.error('Error fetching entities:', err);
     }
   };
 
@@ -225,33 +358,40 @@ export default function DeviceDashboard() {
       socketRef.current.disconnect();
     }
     
+    // Get the base URL from the API client
+    const baseUrl = apiClient.getBaseUrl();
+    
     // Create new Socket.IO connection
-    const socket = io('http://localhost:8080', {
-      path: '/api/ws/entities',
+    const socket = io(baseUrl, {
+      path: '/ws',
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      timeout: 10000, // 10 second timeout
     });
     
     socket.on('connect', () => {
       console.log('Connected to entity Socket.IO');
+      setError(null);
     });
     
     socket.on('state_changed', (data) => {
       try {
-        if (data.type === 'state_changed') {
+        if (data && data.type === 'state_changed' && data.data) {
           const { entity_id, new_state } = data.data;
-          setEntityStates(prev => ({
-            ...prev,
-            [entity_id]: {
-              entity_id,
-              state: new_state.state,
-              attributes: new_state.attributes || {},
-              last_changed: new Date().toISOString(),
-              last_updated: new Date().toISOString()
-            }
-          }));
+          if (entity_id && new_state) {
+            setEntityStates(prev => ({
+              ...prev,
+              [entity_id]: {
+                entity_id,
+                state: new_state.state || 'unknown',
+                attributes: new_state.attributes || {},
+                last_changed: new Date().toISOString(),
+                last_updated: new Date().toISOString()
+              }
+            }));
+          }
         }
       } catch (err) {
         console.error('Error parsing Socket.IO message:', err);
@@ -265,7 +405,7 @@ export default function DeviceDashboard() {
     
     socket.on('connect_error', (err) => {
       console.error('Entity Socket.IO connection error:', err);
-      setError('Entity Socket.IO connection error: ' + err.message);
+      setError('Entity Socket.IO connection error: ' + (err.message || 'Connection failed'));
     });
     
     socket.on('error', (err) => {
@@ -277,7 +417,11 @@ export default function DeviceDashboard() {
       console.log('Entity Socket.IO connection closed:', reason);
       if (reason === 'io server disconnect') {
         // The disconnection was initiated by the server, you need to reconnect manually
-        socket.connect();
+        setTimeout(() => {
+          if (socketRef.current === socket) {
+            socket.connect();
+          }
+        }, 1000);
       }
     });
     
@@ -323,11 +467,23 @@ export default function DeviceDashboard() {
   };
 
   if (loading) {
-    return <div className="p-4">Loading devices and entities...</div>;
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mb-4"></div>
+          <p className="text-muted-foreground">Loading devices and entities...</p>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="p-4 text-red-500">Error: {error}</div>;
+    return (
+      <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
+        <p className="font-medium">Error: {error}</p>
+        <p className="text-sm mt-1">Please check your connection and try again.</p>
+      </div>
+    );
   }
 
   return (

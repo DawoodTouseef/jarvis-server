@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Background circle with subtle gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a14" />
+      <stop offset="100%" stop-color="#1a1a2e" />
+    </linearGradient>
+    <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00c8ff" />
+      <stop offset="50%" stop-color="#0088ff" />
+      <stop offset="100%" stop-color="#8040ff" />
+    </linearGradient>
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur"/>
+      <feFlood flood-color="#00c8ff" flood-opacity="0.8" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="innerGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
+      <feFlood flood-color="#ffffff" flood-opacity="0.3" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="url(#bgGradient)" />
+  
+  <!-- Outer ring with segmented design -->
+  <circle cx="100" cy="100" r="85" fill="none" stroke="url(#neonGradient)" stroke-width="2" stroke-dasharray="5,5" />
+  
+  <!-- Central hexagon representing AI/core intelligence -->
+  <polygon points="100,50 140,75 140,125 100,150 60,125 60,75" fill="none" stroke="url(#neonGradient)" stroke-width="3" filter="url(#neonGlow)" />
+  
+  <!-- Inner geometric pattern representing connectivity/data -->
+  <g stroke="url(#neonGradient)" stroke-width="1.5" fill="none">
+    <circle cx="100" cy="100" r="30" />
+    <line x1="100" y1="70" x2="100" y2="130" />
+    <line x1="70" y1="100" x2="130" y2="100" />
+    <line x1="79" y1="79" x2="121" y2="121" />
+    <line x1="121" y1="79" x2="79" y2="121" />
+  </g>
+  
+  <!-- JARVIS text with neon effect -->
+  <text x="100" y="175" font-family="Arial, sans-serif" font-weight="bold" font-size="24" text-anchor="middle" fill="url(#neonGradient)" filter="url(#neonGlow)">JARVIS</text>
+  
+  <!-- Small data points/particles -->
+  <circle cx="70" cy="60" r="2" fill="#00c8ff" filter="url(#innerGlow)" />
+  <circle cx="130" cy="60" r="2" fill="#00c8ff" filter="url(#innerGlow)" />
+  <circle cx="70" cy="140" r="2" fill="#00c8ff" filter="url(#innerGlow)" />
+  <circle cx="130" cy="140" r="2" fill="#00c8ff" filter="url(#innerGlow)" />
+  <circle cx="50" cy="100" r="2" fill="#8040ff" filter="url(#innerGlow)" />
+  <circle cx="150" cy="100" r="2" fill="#8040ff" filter="url(#innerGlow)" />
+</svg>
