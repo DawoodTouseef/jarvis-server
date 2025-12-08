@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # Main Jarvis application
+  jarvis:
+    build: .
+    container_name: jarvis-server
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - DATABASE_URL=sqlite:////app/backend/data/webui.db
+      - REDIS_URL=redis://redis:6379
+      - WEBUI_SECRET_KEY=your-secret-key-here
+    volumes:
+      - ./data:/app/backend/data
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: jarvis-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

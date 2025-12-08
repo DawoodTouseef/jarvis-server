@@ -1,14 +1,64 @@
-__pycache__
-.env
-_old
-uploads
-.ipynb_checkpoints
-*.db
-_test
-!/data
-/data/*
-!/data/litellm
-/data/litellm/*
-!data/litellm/config.yaml
+# Node.js dependencies
+node_modules/
 
-!data/config.json
+# Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+.pytest_cache
+.nox/
+.nox
+.tox/
+.tox
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Logs
+logs/
+*.log
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Docker
+docker-compose*.yml
+
+# Testing
+tests/
+test_*
+*_test.py
+
+# Documentation
+docs/
+
+# Temporary files
+tmp/
+temp/
+
+# System files
+Thumbs.db
