@@ -69,5 +69,5 @@ echo Port: %PORT%
 echo Workers: %UVICORN_WORKERS%
 echo ========================================
 
-uvicorn backend.main:app --host "%HOST%" --port "%PORT%" --forwarded-allow-ips '*' --workers %UVICORN_WORKERS% --ws auto
+python start.py
 :: For ssl user uvicorn backend.main:app --host "%HOST%" --port "%PORT%" --forwarded-allow-ips '*' --ssl-keyfile "key.pem" --ssl-certfile "cert.pem" --ws auto

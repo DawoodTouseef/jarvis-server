@@ -93,7 +93,6 @@ from backend.routers import (
     users,
     utils,
     scim,
-    home_assistant,
     floor_area_subarea,
     analytics,
     enhanced_dashboard,
@@ -506,6 +505,8 @@ from backend.utils.redis import get_sentinels_from_env
 
 
 from backend.constants import ERROR_MESSAGES
+from zeroconf import ServiceInfo, Zeroconf
+import socket
 
 
 if SAFE_MODE:
@@ -553,6 +554,105 @@ https://github.com/DawoodTouseef/jarvis-server
 """
 )
 
+# Global zeroconf instance
+zeroconf = None
+service_info = None
+
+def get_local_ip():
+    """Get the local IP address"""
+    try:
+        # Try to get IP by connecting to an external address
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        pass
+        
+    try:
+        # If that fails, try to get the hostname and resolve it
+        hostname = socket.gethostname()
+        ip = socket.gethostbyname(hostname)
+        return ip
+    except Exception:
+        pass
+        
+    # If all else fails, return localhost
+    return '127.0.0.1'
+
+import threading
+import time
+
+def register_service(port=8000, service_name="MyApp Server"):
+    """Register server on local network using mDNS"""
+    global zeroconf, service_info
+    
+    try:
+        local_ip = get_local_ip()
+        print(f"🔧 Attempting to register mDNS service for {service_name} at {local_ip}:{port}")
+        
+        # Service type - this is like the "device type" in Bluetooth
+        service_type = "_jarvis._tcp.local."
+        
+        # Create service info
+        service_info = ServiceInfo(
+            service_type,
+            f"{service_name}.{service_type}",
+            addresses=[socket.inet_aton(local_ip)],
+            port=port,
+            properties={
+                'version': '1.0.0',
+                'name': service_name,
+                'description': 'AI  Server'
+            },
+            server=f"{service_name}.local."
+        )
+        
+        # Register service with timeout handling
+        zeroconf = Zeroconf()
+        # Run registration in a separate thread to avoid blocking
+        def register_in_thread():
+            try:
+                zeroconf.register_service(service_info, ttl=120)
+            except Exception as thread_e:
+                print(f"❌ Error in registration thread: {thread_e}")
+        
+        registration_thread = threading.Thread(target=register_in_thread, daemon=True)
+        registration_thread.start()
+        
+        # Store references for potential cleanup
+        globals()['zeroconf'] = zeroconf
+        globals()['service_info'] = service_info
+        
+        print(f"✅ Server registration initiated for: {service_name}")
+        print(f"📡 Broadcasting on: {local_ip}:{port}")
+        print(f"🔍 Service type: {service_type}")
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ Failed to register mDNS service: {str(e)}")
+        print(f"🔧 Full error traceback: {traceback.format_exc()}")
+        print(f"💡 This could be due to network permissions in Docker or network interface not ready")
+        print(f"💡 IP address used: {local_ip}, Port: {port}")
+
+def unregister_service():
+    """Unregister service when shutting down"""
+    global zeroconf, service_info
+    try:
+        if 'zeroconf' in globals() and 'service_info' in globals() and zeroconf and service_info:
+            zeroconf.unregister_service(service_info)
+            zeroconf.close()
+            print("❌ Service unregistered")
+        elif hasattr(globals().get('zeroconf', None), 'unregister_service'):
+            # Alternative reference check
+            globals()['zeroconf'].unregister_service(globals()['service_info'])
+            globals()['zeroconf'].close()
+            print("❌ Service unregistered")
+    except Exception as e:
+        print(f"❌ Error during service unregistration: {e}")
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -570,6 +670,8 @@ async def lifespan(app: FastAPI):
     log.info("Installing external dependencies of functions and tools...")
     install_tool_and_function_dependencies()
 
+    port = int(os.getenv("DNS_PORT", 8080))
+    register_service(port=port, service_name="J.A.R.V.I.S. Server")
     app.state.redis = get_redis_connection(
         redis_url=REDIS_URL,
         redis_sentinels=get_sentinels_from_env(
@@ -615,7 +717,6 @@ async def lifespan(app: FastAPI):
 
     if hasattr(app.state, "redis_task_command_listener"):
         app.state.redis_task_command_listener.cancel()
-
 
 app = FastAPI(
     title="J.A.R.V.I.S. AI Server",
@@ -1340,7 +1441,6 @@ if SCIM_ENABLED:
     app.include_router(scim.router, prefix="/api/v1/scim/v2", tags=["scim"])
 
 # Home Assistant API
-app.include_router(home_assistant.router, prefix="/api/v1/homeassistant", tags=["HomeAssistant"])
 app.include_router(floor_area_subarea.router, prefix="/api/v1/floor-area-subarea", tags=["FloorAreaSubArea"])
 
 # Analytics API
