@@ -16,7 +16,7 @@ from backend.utils.tools import (
 )
 from backend.utils.mcp.client import MCPClient
 
-from backend.env import SRC_LOG_LEVELS
+from backend.env import PROXIES, SRC_LOG_LEVELS
 
 from backend.utils.oauth import (
     get_discovery_urls,
@@ -211,7 +211,7 @@ async def verify_tool_servers_config(
                     log.debug(
                         f"Trying to fetch OAuth 2.1 discovery document from {discovery_url}"
                     )
-                    async with aiohttp.ClientSession() as session:
+                    async with aiohttp.ClientSession(proxy=PROXIES) as session:
                         async with session.get(
                             discovery_url
                         ) as oauth_server_metadata_response:

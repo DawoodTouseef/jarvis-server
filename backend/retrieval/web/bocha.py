@@ -50,7 +50,7 @@ def search_bocha(
         {"query": query, "summary": True, "freshness": "noLimit", "count": count}
     )
 
-    response = requests.post(url, headers=headers, data=payload, timeout=5)
+    response = requests.post(url, headers=headers, data=payload, timeout=5, proxies=PROXIES)
     response.raise_for_status()
     results = _parse_response(response.json())
     print(results)

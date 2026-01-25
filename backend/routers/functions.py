@@ -23,7 +23,7 @@ from backend.config import CACHE_DIR
 from backend.constants import ERROR_MESSAGES
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from backend.utils.auth import get_admin_user, get_verified_user
-from backend.env import SRC_LOG_LEVELS
+from backend.env import PROXIES, SRC_LOG_LEVELS
 from pydantic import BaseModel, HttpUrl
 
 
@@ -112,7 +112,7 @@ async def load_function_from_url(
     )
 
     try:
-        async with aiohttp.ClientSession(trust_env=True) as session:
+        async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session:
             async with session.get(
                 url, headers={"Content-Type": "application/json"}
             ) as resp:

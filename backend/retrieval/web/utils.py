@@ -39,7 +39,7 @@ from backend.config import (
     EXTERNAL_WEB_LOADER_URL,
     EXTERNAL_WEB_LOADER_API_KEY,
 )
-from backend.env import SRC_LOG_LEVELS, AIOHTTP_CLIENT_SESSION_SSL
+from backend.env import PROXIES, SRC_LOG_LEVELS, AIOHTTP_CLIENT_SESSION_SSL
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["RAG"])
@@ -505,7 +505,7 @@ class SafeWebBaseLoader(WebBaseLoader):
     async def _fetch(
         self, url: str, retries: int = 3, cooldown: int = 2, backoff: float = 1.5
     ) -> str:
-        async with aiohttp.ClientSession(trust_env=self.trust_env) as session:
+        async with aiohttp.ClientSession(trust_env=self.trust_env, proxy=PROXIES) as session:
             for i in range(retries):
                 try:
                     kwargs: Dict = dict(

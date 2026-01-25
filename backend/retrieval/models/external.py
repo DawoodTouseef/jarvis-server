@@ -4,7 +4,7 @@ from typing import Optional, List, Tuple
 from urllib.parse import quote
 
 
-from backend.env import ENABLE_FORWARD_USER_INFO_HEADERS, SRC_LOG_LEVELS
+from backend.env import ENABLE_FORWARD_USER_INFO_HEADERS, PROXIES, SRC_LOG_LEVELS
 from backend.retrieval.models.base_reranker import BaseReranker
 
 
@@ -57,6 +57,7 @@ class ExternalReranker(BaseReranker):
                     ),
                 },
                 json=payload,
+                proxies=PROXIES,
             )
 
             r.raise_for_status()

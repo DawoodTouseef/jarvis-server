@@ -173,8 +173,9 @@ export default function IntegrationManager() {
     }
     
     // Create new Socket.IO connection
-    const socket = io('http://localhost:8080', {
-      path: '/ws',
+    // Use dynamic baseUrl with /ws path where Socket.IO is mounted
+    const baseUrl = apiClient.getBaseUrl();
+    const socket = io(baseUrl + '/ws', {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,

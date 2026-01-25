@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from "react"
+import { useEffect ,useState} from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -8,7 +8,7 @@ import { apiClient } from "@/lib/api"
 
 export default function HomePage() {
   const router = useRouter()
-
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   useEffect(() => {
     const checkAuth = async () => {
       // Check for auth token in localStorage first (for "Remember me" users)
@@ -25,6 +25,7 @@ export default function HomePage() {
           apiClient.setToken(token)
           const response = await apiClient.getSessionUser()
           if (response.success && response.data) {
+            setIsAuthenticated(true)
             router.push("/dashboard")
           } else {
             // Token is invalid, clean up
@@ -51,7 +52,6 @@ export default function HomePage() {
     
     checkAuth()
   }, [router])
-  
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden">
       {/* Grid pattern overlay */}
@@ -65,13 +65,13 @@ export default function HomePage() {
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                 <defs>
                   <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#00c8ff" />
-                    <stop offset="50%" stop-color="#0088ff" />
-                    <stop offset="100%" stop-color="#8040ff" />
+                    <stop offset="0%" stopColor="#00c8ff" />
+                    <stop offset="50%" stopColor="#0088ff" />
+                    <stop offset="100%" stopColor="#8040ff" />
                   </linearGradient>
                   <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
                     <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
-                    <feFlood flood-color="#00c8ff" flood-opacity="0.8" result="color"/>
+                    <feFlood floodColor="#00c8ff" floodOpacity="0.8" result="color"/>
                     <feComposite in="color" in2="blur" operator="in" result="glow"/>
                     <feMerge>
                       <feMergeNode in="glow"/>
@@ -79,8 +79,8 @@ export default function HomePage() {
                     </feMerge>
                   </filter>
                 </defs>
-                <polygon points="50,25 70,37.5 70,62.5 50,75 30,62.5 30,37.5" fill="none" stroke="url(#neonGradient)" stroke-width="2" filter="url(#neonGlow)" />
-                <circle cx="50" cy="50" r="15" fill="none" stroke="url(#neonGradient)" stroke-width="1" />
+                <polygon points="50,25 70,37.5 70,62.5 50,75 30,62.5 30,37.5" fill="none" stroke="url(#neonGradient)" strokeWidth="2" filter="url(#neonGlow)" />
+                <circle cx="50" cy="50" r="15" fill="none" stroke="url(#neonGradient)" strokeWidth="1" />
               </svg>
             </div>
             <span className="text-sm font-mono text-primary">Virtual Assistant AI</span>
@@ -120,7 +120,7 @@ export default function HomePage() {
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-12">
-          <Link href="/auth/login">
+          <Link href={isAuthenticated ? "/dashboard" : "/auth/login"}>
             <Button size="lg" className="neon-glow-strong group">
               Access Dashboard
               <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />

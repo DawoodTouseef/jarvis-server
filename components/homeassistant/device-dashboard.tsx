@@ -362,8 +362,8 @@ export default function DeviceDashboard() {
     const baseUrl = apiClient.getBaseUrl();
     
     // Create new Socket.IO connection
-    const socket = io(baseUrl, {
-      path: '/ws',
+    // Socket.IO is mounted at /ws on the server
+    const socket = io(baseUrl + '/ws', {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,

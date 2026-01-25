@@ -3,7 +3,7 @@ from typing import Optional
 
 import requests
 from backend.retrieval.web.main import SearchResult, get_filtered_results
-from backend.env import SRC_LOG_LEVELS
+from backend.env import SRC_LOG_LEVELS, PROXIES
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["RAG"])
@@ -74,6 +74,7 @@ def search_searxng(
             "Connection": "keep-alive",
         },
         params=params,
+        proxies=PROXIES
     )
 
     response.raise_for_status()  # Raise an exception for HTTP errors.

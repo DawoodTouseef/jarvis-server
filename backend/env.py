@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import pkgutil
+from pydoc import doc
 import sys
 import shutil
 from uuid import uuid4
@@ -12,7 +13,7 @@ from cryptography.hazmat.primitives import serialization
 import markdown
 from bs4 import BeautifulSoup
 from backend.constants import ERROR_MESSAGES
-
+import docker
 ####################################
 # Load .env file
 ####################################
@@ -37,7 +38,32 @@ except ImportError:
     print("dotenv not installed, skipping...")
 
 DOCKER = os.environ.get("DOCKER", "False").lower() == "true"
+# Proxy configuration - define proxies for HTTP requests
+PROXIES = None
 
+# Check if running in Docker environment to configure proxies
+try:
+    client = docker.from_env()
+    # If Docker is available, you can customize proxy settings here if needed
+    # For now, setting default SOCKS proxy configuration
+    PROXIES = {
+        'http': os.environ.get('HTTP_PROXY', 'socks5://127.0.0.1:9050'),
+        'https': os.environ.get('HTTPS_PROXY', 'socks5://127.0.0.1:9050')
+    }
+except docker.errors.DockerException:
+    # If Docker is not available, check for proxy settings in environment variables
+    http_proxy = os.environ.get('HTTP_PROXY')
+    https_proxy = os.environ.get('HTTPS_PROXY')
+    
+    if http_proxy or https_proxy:
+        PROXIES = {
+            'http': http_proxy,
+            'https': https_proxy
+        }
+
+# Allow overriding proxies with environment variables
+if os.environ.get('USE_NO_PROXY', '').lower() == 'true':
+    PROXIES = None
 # device type embedding models - "cpu" (default), "cuda" (nvidia gpu required) or "mps" (apple silicon) - choosing this right can lead to better performance
 USE_CUDA = os.environ.get("USE_CUDA_DOCKER", "false")
 

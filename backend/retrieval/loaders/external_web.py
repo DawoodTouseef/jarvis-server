@@ -4,7 +4,7 @@ from typing import Iterator, List, Union
 
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
-from backend.env import SRC_LOG_LEVELS
+from backend.env import PROXIES, SRC_LOG_LEVELS
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["RAG"])
@@ -38,6 +38,7 @@ class ExternalWebLoader(BaseLoader):
                     json={
                         "urls": urls,
                     },
+                    proxies=PROXIES
                 )
                 response.raise_for_status()
                 results = response.json()

@@ -3,7 +3,7 @@ import logging
 import aiohttp
 
 from backend.config import WEBUI_FAVICON_URL
-from backend.env import SRC_LOG_LEVELS, VERSION
+from backend.env import PROXIES, SRC_LOG_LEVELS, VERSION
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["WEBHOOK"])
@@ -51,7 +51,7 @@ async def post_webhook(name: str, url: str, message: str, event_data: dict) -> b
             payload = {**event_data}
 
         log.debug(f"payload: {payload}")
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(proxy=PROXIES) as session:
             async with session.post(url, json=payload) as r:
                 r_text = await r.text()
                 r.raise_for_status()

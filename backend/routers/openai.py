@@ -32,6 +32,7 @@ from backend.env import (
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
     ENABLE_FORWARD_USER_INFO_HEADERS,
     BYPASS_MODEL_ACCESS_CONTROL,
+    PROXIES
 )
 from backend.models.users import UserModel
 
@@ -65,7 +66,7 @@ log.setLevel(SRC_LOG_LEVELS["OPENAI"])
 async def send_get_request(url, key=None, user: UserModel = None):
     timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST)
     try:
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True,proxy=PROXIES) as session:
             async with session.get(
                 url,
                 headers={
@@ -571,6 +572,7 @@ async def get_models(
         async with aiohttp.ClientSession(
             trust_env=True,
             timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST),
+            proxy=PROXIES
         ) as session:
             try:
                 headers, cookies = await get_headers_and_cookies(
@@ -657,6 +659,7 @@ async def verify_connection(
     async with aiohttp.ClientSession(
         trust_env=True,
         timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST),
+        proxy=PROXIES
     ) as session:
         try:
             headers, cookies = await get_headers_and_cookies(
@@ -931,7 +934,8 @@ async def generate_chat_completion(
 
     try:
         session = aiohttp.ClientSession(
-            trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
+            trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+            proxy=PROXIES
         )
 
         r = await session.request(
@@ -1017,7 +1021,7 @@ async def embeddings(request: Request, form_data: dict, user):
         request, url, key, api_config, user=user
     )
     try:
-        session = aiohttp.ClientSession(trust_env=True)
+        session = aiohttp.ClientSession(trust_env=True, proxy=PROXIES)
         r = await session.request(
             method="POST",
             url=f"{url}/embeddings",

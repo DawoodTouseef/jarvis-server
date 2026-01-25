@@ -10,7 +10,6 @@ export default function MapDeviceTest() {
     try {
       // Test fetching entities
       const entitiesResponse = await apiClient.getHomeAssistantEntities();
-      console.log('Entities:', entitiesResponse);
       
       // Test calling a service
       if (entitiesResponse.success && entitiesResponse.data && entitiesResponse.data.length > 0) {

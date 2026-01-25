@@ -32,7 +32,6 @@ export function LocationTracker() {
   const [isTracking, setIsTracking] = useState(false);
   const [lastLocation, setLastLocation] = useState<LocationData | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-
   // Get current user information
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -58,18 +57,13 @@ export function LocationTracker() {
 
     // Get token from localStorage
     const token = localStorage.getItem("authToken");
-    
+    console.log("Connecting to WebSocket with token:", token);
     if (!token) {
-      console.error("No auth token found");
       return;
     }
 
-    // Get the base URL from the API client
     const baseUrl = apiClient.getBaseUrl();
-    
-    // Create new Socket.IO connection
-    const socket = io(baseUrl, {
-      path: "/ws",
+    const socket = io(baseUrl + '/ws', {
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -81,21 +75,17 @@ export function LocationTracker() {
     });
 
     socket.on("connect", () => {
-      console.log("Connected to location tracking Socket.IO");
     });
 
     socket.on("connect_error", (err) => {
-      console.error("Location tracking Socket.IO connection error:", err);
       setLocationError("Connection error: " + err.message);
     });
 
     socket.on("error", (err) => {
-      console.error("Location tracking Socket.IO error:", err);
       setLocationError("Socket error: " + (err as Error).message);
     });
 
     socket.on("disconnect", (reason) => {
-      console.log("Location tracking Socket.IO connection closed:", reason);
       if (reason === "io server disconnect") {
         // The disconnection was initiated by the server, you need to reconnect manually
         setTimeout(() => {
@@ -283,7 +273,6 @@ export function LocationTracker() {
         connectToWebSocket();
         startLocationTracking();
       } else {
-        console.warn("Geolocation is not available in this environment");
         setLocationError("Geolocation is not supported by this browser");
       }
     }

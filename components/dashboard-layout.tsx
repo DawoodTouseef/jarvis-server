@@ -81,13 +81,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                   <defs>
                     <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stop-color="#00c8ff" />
-                      <stop offset="50%" stop-color="#0088ff" />
-                      <stop offset="100%" stop-color="#8040ff" />
+                      <stop offset="0%" stopColor="#00c8ff" />
+                      <stop offset="50%" stopColor="#0088ff" />
+                      <stop offset="100%" stopColor="#8040ff" />
                     </linearGradient>
                     <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
                       <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
-                      <feFlood flood-color="#00c8ff" flood-opacity="0.8" result="color"/>
+                      <feFlood floodColor="#00c8ff" floodOpacity="0.8" result="color"/>
                       <feComposite in="color" in2="blur" operator="in" result="glow"/>
                       <feMerge>
                         <feMergeNode in="glow"/>
@@ -95,8 +95,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       </feMerge>
                     </filter>
                   </defs>
-                  <polygon points="50,25 70,37.5 70,62.5 50,75 30,62.5 30,37.5" fill="none" stroke="url(#neonGradient)" stroke-width="2" filter="url(#neonGlow)" />
-                  <circle cx="50" cy="50" r="15" fill="none" stroke="url(#neonGradient)" stroke-width="1" />
+                  <polygon points="50,25 70,37.5 70,62.5 50,75 30,62.5 30,37.5" fill="none" stroke="url(#neonGradient)" strokeWidth="2" filter="url(#neonGlow)" />
+                  <circle cx="50" cy="50" r="15" fill="none" stroke="url(#neonGradient)" strokeWidth="1" />
                 </svg>
               </div>
             </div>
@@ -159,13 +159,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                       <defs>
                         <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stop-color="#00c8ff" />
-                          <stop offset="50%" stop-color="#0088ff" />
-                          <stop offset="100%" stop-color="#8040ff" />
+                          <stop offset="0%" stopColor="#00c8ff" />
+                          <stop offset="50%" stopColor="#0088ff" />
+                          <stop offset="100%" stopColor="#8040ff" />
                         </linearGradient>
                         <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
                           <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
-                          <feFlood flood-color="#00c8ff" flood-opacity="0.8" result="color"/>
+                          <feFlood floodColor="#00c8ff" floodOpacity="0.8" result="color"/>
                           <feComposite in="color" in2="blur" operator="in" result="glow"/>
                           <feMerge>
                             <feMergeNode in="glow"/>
@@ -173,8 +173,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                           </feMerge>
                         </filter>
                       </defs>
-                      <polygon points="50,25 70,37.5 70,62.5 50,75 30,62.5 30,37.5" fill="none" stroke="url(#neonGradient)" stroke-width="2" filter="url(#neonGlow)" />
-                      <circle cx="50" cy="50" r="15" fill="none" stroke="url(#neonGradient)" stroke-width="1" />
+                      <polygon points="50,25 70,37.5 70,62.5 50,75 30,62.5 30,37.5" fill="none" stroke="url(#neonGradient)" strokeWidth="2" filter="url(#neonGlow)" />
+                      <circle cx="50" cy="50" r="15" fill="none" stroke="url(#neonGradient)" strokeWidth="1" />
                     </svg>
                   </div>
                 </div>
@@ -232,13 +232,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
                   <defs>
                     <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stop-color="#00c8ff" />
-                      <stop offset="50%" stop-color="#0088ff" />
-                      <stop offset="100%" stop-color="#8040ff" />
+                      <stop offset="0%" stopColor="#00c8ff" />
+                      <stop offset="50%" stopColor="#0088ff" />
+                      <stop offset="100%" stopColor="#8040ff" />
                     </linearGradient>
                     <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
                       <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
-                      <feFlood flood-color="#00c8ff" flood-opacity="0.8" result="color"/>
+                      <feFlood floodColor="#00c8ff" floodOpacity="0.8" result="color"/>
                       <feComposite in="color" in2="blur" operator="in" result="glow"/>
                       <feMerge>
                         <feMergeNode in="glow"/>
@@ -246,8 +246,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       </feMerge>
                     </filter>
                   </defs>
-                  <polygon points="50,25 70,37.5 70,62.5 50,75 30,62.5 30,37.5" fill="none" stroke="url(#neonGradient)" stroke-width="2" filter="url(#neonGlow)" />
-                  <circle cx="50" cy="50" r="15" fill="none" stroke="url(#neonGradient)" stroke-width="1" />
+                  <polygon points="50,25 70,37.5 70,62.5 50,75 30,62.5 30,37.5" fill="none" stroke="url(#neonGradient)" strokeWidth="2" filter="url(#neonGlow)" />
+                  <circle cx="50" cy="50" r="15" fill="none" stroke="url(#neonGradient)" strokeWidth="1" />
                 </svg>
               </div>
               <span className="font-bold neon-text">JARVIS</span>

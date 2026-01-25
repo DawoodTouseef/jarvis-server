@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
-from backend.env import SRC_LOG_LEVELS
+from backend.env import PROXIES, SRC_LOG_LEVELS
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["RAG"])
@@ -47,7 +47,7 @@ class ExternalDocumentLoader(BaseLoader):
             url = url[:-1]
 
         try:
-            response = requests.put(f"{url}/process", data=data, headers=headers)
+            response = requests.put(f"{url}/process", data=data, headers=headers,proxies=PROXIES)
         except Exception as e:
             log.error(f"Error connecting to endpoint: {e}")
             raise Exception(f"Error connecting to endpoint: {e}")

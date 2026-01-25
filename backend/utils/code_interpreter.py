@@ -8,7 +8,7 @@ import aiohttp
 import websockets
 from pydantic import BaseModel
 
-from backend.env import SRC_LOG_LEVELS
+from backend.env import PROXIES, SRC_LOG_LEVELS
 
 logger = logging.getLogger(__name__)
 logger.setLevel(SRC_LOG_LEVELS["MAIN"])
@@ -52,7 +52,7 @@ class JupyterCodeExecuter:
         self.kernel_id = ""
         if self.base_url[-1] != "/":
             self.base_url += "/"
-        self.session = aiohttp.ClientSession(trust_env=True, base_url=self.base_url)
+        self.session = aiohttp.ClientSession(trust_env=True, base_url=self.base_url,proxy=PROXIES)
         self.params = {}
         self.result = ResultModel()
 

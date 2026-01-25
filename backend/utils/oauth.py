@@ -58,6 +58,7 @@ from backend.config import (
 from backend.constants import ERROR_MESSAGES, WEBHOOK_MESSAGES
 from backend.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
+    PROXIES,
     WEBUI_NAME,
     WEBUI_AUTH_COOKIE_SAME_SITE,
     WEBUI_AUTH_COOKIE_SECURE,
@@ -251,7 +252,7 @@ async def get_oauth_client_info_with_dynamic_client_registration(
         # Attempt to fetch OAuth server metadata to get registration endpoint & scopes
         discovery_urls = get_discovery_urls(oauth_server_url)
         for url in discovery_urls:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(proxy=PROXIES) as session:
                 async with session.get(
                     url, ssl=AIOHTTP_CLIENT_SESSION_SSL
                 ) as oauth_server_metadata_response:
@@ -287,7 +288,7 @@ async def get_oauth_client_info_with_dynamic_client_registration(
         )
 
         # Perform dynamic client registration and return client info
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(proxy=PROXIES) as session:
             async with session.post(
                 registration_url, json=registration_data, ssl=AIOHTTP_CLIENT_SESSION_SSL
             ) as oauth_client_registration_response:
@@ -490,7 +491,7 @@ class OAuthClientManager:
                 return None
 
             token_endpoint = None
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session_http:
                 async with session_http.get(
                     self.get_server_metadata_url(client_id)
                 ) as r:
@@ -515,7 +516,7 @@ class OAuthClientManager:
                 refresh_data["client_secret"] = client.client_secret
 
             # Make refresh request
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session_http:
                 async with session_http.post(
                     token_endpoint,
                     data=refresh_data,
@@ -766,7 +767,7 @@ class OAuthManager:
 
             server_metadata_url = self.get_server_metadata_url(provider)
             token_endpoint = None
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session_http:
                 async with session_http.get(server_metadata_url) as r:
                     if r.status == 200:
                         openid_data = await r.json()
@@ -790,7 +791,7 @@ class OAuthManager:
                 refresh_data["client_secret"] = client.client_secret
 
             # Make refresh request
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session_http:
                 async with session_http.post(
                     token_endpoint,
                     data=refresh_data,
@@ -1058,7 +1059,7 @@ class OAuthManager:
                 get_kwargs["headers"] = {
                     "Authorization": f"Bearer {access_token}",
                 }
-            async with aiohttp.ClientSession(trust_env=True) as session:
+            async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session:
                 async with session.get(
                     picture_url, **get_kwargs, ssl=AIOHTTP_CLIENT_SESSION_SSL
                 ) as resp:
@@ -1147,7 +1148,7 @@ class OAuthManager:
                     try:
                         access_token = token.get("access_token")
                         headers = {"Authorization": f"Bearer {access_token}"}
-                        async with aiohttp.ClientSession(trust_env=True) as session:
+                        async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session:
                             async with session.get(
                                 "https://api.github.com/user/emails",
                                 headers=headers,

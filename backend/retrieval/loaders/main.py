@@ -30,7 +30,7 @@ from backend.retrieval.loaders.datalab_marker import DatalabMarkerLoader
 from backend.retrieval.loaders.mineru import MinerULoader
 
 
-from backend.env import SRC_LOG_LEVELS, GLOBAL_LOG_LEVEL
+from backend.env import PROXIES, SRC_LOG_LEVELS, GLOBAL_LOG_LEVEL
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ class TikaLoader:
             endpoint += "/"
         endpoint += "tika/text"
 
-        r = requests.put(endpoint, data=data, headers=headers)
+        r = requests.put(endpoint, data=data, headers=headers,proxies=PROXIES)
 
         if r.ok:
             raw_metadata = r.json()
@@ -201,7 +201,7 @@ class DoclingLoader:
                     params["pipeline"] = self.params.get("pipeline")
 
             endpoint = f"{self.url}/v1/convert/file"
-            r = requests.post(endpoint, files=files, data=params)
+            r = requests.post(endpoint, files=files, data=params,proxies=PROXIES)
 
         if r.ok:
             result = r.json()

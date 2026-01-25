@@ -285,7 +285,6 @@ export default function RegisterPage() {
       }
       let response
       if (!hasExistingUsers) {
-        console.log("Extended Signup")
         response = await apiClient.extendedSignup(signupData)
       }
       else {

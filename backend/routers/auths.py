@@ -96,6 +96,7 @@ async def get_session_user(
 ):
 
     auth_header = request.headers.get("Authorization")
+    print(f"Authorization:{auth_header}")
     auth_token = get_http_authorization_cred(auth_header)
     token = auth_token.credentials
     data = decode_token(token)

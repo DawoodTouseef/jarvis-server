@@ -15,7 +15,6 @@ export function HomeAssistantTest() {
     try {
       // Test getting entities
       const entitiesResponse = await apiClient.getHomeAssistantEntities()
-      console.log("Entities response:", entitiesResponse)
       
       if (entitiesResponse.success) {
         setEntities(entitiesResponse.data || [])

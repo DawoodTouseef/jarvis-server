@@ -4,7 +4,7 @@ from typing import Iterator, List, Literal, Union
 
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
-from backend.env import SRC_LOG_LEVELS
+from backend.env import PROXIES, SRC_LOG_LEVELS
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["RAG"])
@@ -66,7 +66,7 @@ class TavilyLoader(BaseLoader):
                 urls_param = batch_urls[0] if len(batch_urls) == 1 else batch_urls
                 payload = {"urls": urls_param, "extract_depth": self.extract_depth}
                 # Make the API call
-                response = requests.post(self.api_url, headers=headers, json=payload)
+                response = requests.post(self.api_url, headers=headers, json=payload,proxies=PROXIES)
                 response.raise_for_status()
                 response_data = response.json()
                 # Process successful results

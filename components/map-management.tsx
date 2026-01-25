@@ -250,7 +250,6 @@ function MapManagement() {
        if ('geolocation' in navigator){
             navigator.geolocation.getCurrentPosition(
               (position) => {
-                console.log(`Geolocation success on attempt ${attempt}:`, position);
                 const { latitude, longitude } = position.coords;
                 const currentPosition: [number, number] = [latitude, longitude];
                 
@@ -1026,8 +1025,8 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
       <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
         <defs>
           <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#00c8ff" stop-opacity="0.8"/>
-            <stop offset="100%" stop-color="#00c8ff" stop-opacity="0"/>
+            <stop offset="0%" stopColor="#00c8ff" stop-opacity="0.8"/>
+            <stop offset="100%" stopColor="#00c8ff" stop-opacity="0"/>
           </radialGradient>
           <filter id="blurFilter" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="3" />
@@ -1038,9 +1037,9 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
         <!-- Direction cone -->
         <path d="M20 5 L25 15 L20 13 L15 15 Z" fill="#00c8ff" />
         <!-- Central dot -->
-        <circle cx="20" cy="20" r="6" fill="#00c8ff" stroke="white" stroke-width="2"/>
+        <circle cx="20" cy="20" r="6" fill="#00c8ff" stroke="white" strokeWidth="2"/>
         <!-- Pulse animation -->
-        <circle cx="20" cy="20" r="8" fill="none" stroke="#00c8ff" stroke-width="1" stroke-opacity="0.5">
+        <circle cx="20" cy="20" r="8" fill="none" stroke="#00c8ff" strokeWidth="1" stroke-opacity="0.5">
           <animate attributeName="r" values="8;12;8" dur="2s" repeatCount="indefinite" />
           <animate attributeName="stroke-opacity" values="0.5;0;0.5" dur="2s" repeatCount="indefinite" />
         </circle>
@@ -1085,8 +1084,8 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
       <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
         <defs>
           <radialGradient id="entityGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="${fillColor}" stop-opacity="0.6"/>
-            <stop offset="100%" stop-color="${fillColor}" stop-opacity="0"/>
+            <stop offset="0%" stopColor="${fillColor}" stop-opacity="0.6"/>
+            <stop offset="100%" stopColor="${fillColor}" stop-opacity="0"/>
           </radialGradient>
           <filter id="entityBlurFilter" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="2" />
@@ -1095,7 +1094,7 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
         <!-- Glowing background -->
         <circle cx="16" cy="16" r="14" fill="url(#entityGlow)" filter="url(#entityBlurFilter)" />
         <!-- Central marker -->
-        <path d="M16 4 C12 4 9 7 9 11 C9 14 16 28 16 28 C16 28 23 14 23 11 C23 7 20 4 16 4 Z" fill="${fillColor}" stroke="white" stroke-width="1"/>
+        <path d="M16 4 C12 4 9 7 9 11 C9 14 16 28 16 28 C16 28 23 14 23 11 C23 7 20 4 16 4 Z" fill="${fillColor}" stroke="white" strokeWidth="1"/>
         <circle cx="16" cy="11" r="3" fill="white"/>
       </svg>
     `;
@@ -1713,8 +1712,8 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
       
       if (token) {
         // Create Socket.IO connection for location tracking
-        const socket = io('http://localhost:8080', {
-          path: "/ws",
+        const baseUrl = apiClient.getBaseUrl();
+        const socket = io(baseUrl + '/ws', {
           transports: ['websocket', 'polling'],
           reconnection: true,
           reconnectionAttempts: 5,
@@ -1790,7 +1789,6 @@ const MapComponent: React.FC<MapComponentProps> = (props) => {
       try {
         setLoading(true);
         const response = await apiClient.getHomeAssistantEntities();
-        console.log('Entities:', response.data);
         if (response.success && response.data) {
           // Transform Entity[] to EntityState[]
           const entityStates: EntityState[] = response.data.map((entity: any) => ({

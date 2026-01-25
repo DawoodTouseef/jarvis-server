@@ -14,14 +14,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem("authToken")
-      if (!token) {
+      const session_token = sessionStorage.getItem("authToken")
+      if (!token && !session_token) {
         router.push("/auth/login")
         setIsLoading(false)
         return
       }
       
       // Set token in API client
-      apiClient.setToken(token)
+      if (token) apiClient.setToken(token)
+      else if (session_token) {
+        apiClient.setToken(session_token)
+      }
       
       // Verify token is still valid by making a simple API call
       try {
@@ -29,14 +33,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         if (response.success && response.data) {
           setIsAuthenticated(true)
         } else {
-          // Token is invalid, redirect to login
-          localStorage.removeItem("authToken")
           apiClient.setToken(null)
           router.push("/auth/login")
         }
       } catch (error) {
-        // Error occurred, redirect to login
-        localStorage.removeItem("authToken")
         apiClient.setToken(null)
         router.push("/auth/login")
       } finally {

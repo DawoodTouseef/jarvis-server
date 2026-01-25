@@ -60,17 +60,7 @@ if CORS_ALLOW_ORIGIN:
     else:
         cors_origins = [str(CORS_ALLOW_ORIGIN)]
 
-# Ensure localhost:8080 is in CORS origins for WebSocket connections
-if "http://localhost:8080" not in cors_origins:
-    cors_origins.append("http://localhost:8080")
 
-# Add Vite development server port
-if "http://localhost:3000" not in cors_origins:
-    cors_origins.append("http://localhost:3000")
-
-# Add common localhost ports
-if "http://localhost:5173" not in cors_origins:
-    cors_origins.append("http://localhost:3000")
 if WEBSOCKET_MANAGER == "redis":
     if WEBSOCKET_SENTINEL_HOSTS:
         mgr = socketio.AsyncRedisManager(
@@ -88,9 +78,7 @@ if WEBSOCKET_MANAGER == "redis":
         always_connect=True,
         client_manager=mgr,
         ping_timeout=60,
-    ping_interval=25,
-    # Ensure proper WebSocket handling
-    engineio_logger=True
+        ping_interval=25,
     )
 else:
     sio = socketio.AsyncServer(
@@ -100,9 +88,7 @@ else:
         allow_upgrades=ENABLE_WEBSOCKET_SUPPORT,
         always_connect=True,
         ping_timeout=60,
-    ping_interval=25,
-    # Ensure proper WebSocket handling
-    engineio_logger=True
+        ping_interval=25,
     )
 
 
@@ -220,9 +206,10 @@ async def periodic_usage_pool_cleanup():
         release_func()
 
 
+# Create Socket.IO ASGI app
 app = socketio.ASGIApp(
     sio,
-    
+    static_files={},
 )
 
 

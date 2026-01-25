@@ -27,7 +27,7 @@ from backend.utils.auth import get_admin_user, get_verified_user
 from backend.utils.access_control import has_access, has_permission
 from backend.utils.tools import get_tool_servers
 
-from backend.env import SRC_LOG_LEVELS
+from backend.env import PROXIES, SRC_LOG_LEVELS
 from backend.config import CACHE_DIR, BYPASS_ADMIN_ACCESS_CONTROL
 from backend.constants import ERROR_MESSAGES
 
@@ -220,7 +220,7 @@ async def load_tool_from_url(
     )
 
     try:
-        async with aiohttp.ClientSession(trust_env=True) as session:
+        async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session:
             async with session.get(
                 url, headers={"Content-Type": "application/json"}
             ) as resp:

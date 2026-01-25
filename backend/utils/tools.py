@@ -4,6 +4,7 @@ import re
 import inspect
 import aiohttp
 import asyncio
+from aiohttp.hdrs import PRAGMA
 import yaml
 import json
 
@@ -38,6 +39,7 @@ from backend.models.tools import Tools
 from backend.models.users import UserModel
 from backend.utils.plugin import load_tool_module_by_id
 from backend.env import (
+    PROXIES,
     SRC_LOG_LEVELS,
     AIOHTTP_CLIENT_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA,
@@ -555,7 +557,7 @@ async def get_tool_server_data(token: str, url: str) -> Dict[str, Any]:
     error = None
     try:
         timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True,proxy=PROXIES) as session:
             async with session.get(
                 url, headers=headers, ssl=AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL
             ) as response:
@@ -750,7 +752,8 @@ async def execute_tool_server(
                 body_params = params
 
         async with aiohttp.ClientSession(
-            trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
+            trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+            proxy=PROXIES
         ) as session:
             request_method = getattr(session, http_method.lower())
 

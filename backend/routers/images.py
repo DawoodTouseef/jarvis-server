@@ -456,9 +456,9 @@ def load_b64_image_data(b64_str):
 def load_url_image_data(url, headers=None):
     try:
         if headers:
-            r = requests.get(url, headers=headers)
+            r = requests.get(url, headers=headers, proxies=PROXIES)
         else:
-            r = requests.get(url)
+            r = requests.get(url, proxies=PROXIES)
 
         r.raise_for_status()
         if r.headers["content-type"].split("/")[0] == "image":

@@ -4,7 +4,7 @@ from pprint import pprint
 from typing import Optional
 import requests
 from backend.retrieval.web.main import SearchResult, get_filtered_results
-from backend.env import SRC_LOG_LEVELS
+from backend.env import PROXIES, SRC_LOG_LEVELS
 import argparse
 
 log = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def search_bing(
     headers = {"Ocp-Apim-Subscription-Key": subscription_key}
 
     try:
-        response = requests.get(endpoint, headers=headers, params=params)
+        response = requests.get(endpoint, headers=headers, params=params,proxies=PROXIES)
         response.raise_for_status()
         json_response = response.json()
         results = json_response.get("webPages", {}).get("value", [])

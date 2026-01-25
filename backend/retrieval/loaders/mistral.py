@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 from contextlib import asynccontextmanager
 
 from langchain_core.documents import Document
-from backend.env import SRC_LOG_LEVELS, GLOBAL_LOG_LEVEL
+from backend.env import PROXIES, SRC_LOG_LEVELS, GLOBAL_LOG_LEVEL
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -258,6 +258,7 @@ class MistralLoader:
                     data=data,
                     timeout=self.upload_timeout,  # Use specialized upload timeout
                     stream=False,  # Keep as False for this endpoint
+                    proxies=PROXIES
                 )
 
             return self._handle_response(response)
@@ -327,7 +328,8 @@ class MistralLoader:
 
         def url_request():
             response = requests.get(
-                url, headers=signed_url_headers, params=params, timeout=self.url_timeout
+                url, headers=signed_url_headers, params=params, timeout=self.url_timeout,
+                proxies=PROXIES
             )
             return self._handle_response(response)
 
@@ -358,6 +360,7 @@ class MistralLoader:
                 headers=headers,
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=self.url_timeout),
+                proxy=PROXIES
             ) as response:
                 return await self._handle_response_async(response)
 
@@ -390,7 +393,8 @@ class MistralLoader:
 
         def ocr_request():
             response = requests.post(
-                url, headers=ocr_headers, json=payload, timeout=self.ocr_timeout
+                url, headers=ocr_headers, json=payload, timeout=self.ocr_timeout,
+                proxies=PROXIES
             )
             return self._handle_response(response)
 
@@ -433,6 +437,7 @@ class MistralLoader:
                 json=payload,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=self.ocr_timeout),
+                proxy=PROXIES
             ) as response:
                 ocr_response = await self._handle_response_async(response)
 
@@ -450,7 +455,8 @@ class MistralLoader:
 
         try:
             response = requests.delete(
-                url, headers=self.headers, timeout=self.cleanup_timeout
+                url, headers=self.headers, timeout=self.cleanup_timeout,
+                proxies=PROXIES
             )
             delete_response = self._handle_response(response)
             log.info(f"File deleted successfully: {delete_response}")
@@ -472,6 +478,7 @@ class MistralLoader:
                     timeout=aiohttp.ClientTimeout(
                         total=self.cleanup_timeout
                     ),  # Shorter timeout for cleanup
+                    proxy=PROXIES
                 ) as response:
                     return await self._handle_response_async(response)
 
@@ -508,6 +515,7 @@ class MistralLoader:
             headers={"User-Agent": "OpenWebUI-MistralLoader/2.0"},
             raise_for_status=False,  # We handle status codes manually
             trust_env=True,
+            proxy=PROXIES
         ) as session:
             yield session
 

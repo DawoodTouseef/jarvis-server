@@ -46,6 +46,7 @@ from backend.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     AIOHTTP_CLIENT_TIMEOUT,
     ENV,
+    PROXIES,
     SRC_LOG_LEVELS,
     DEVICE_TYPE,
     ENABLE_FORWARD_USER_INFO_HEADERS,
@@ -333,7 +334,7 @@ async def speech(request: Request, user=Depends(get_verified_user)):
         try:
             timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
             async with aiohttp.ClientSession(
-                timeout=timeout, trust_env=True
+                timeout=timeout, trust_env=True,proxy=PROXIES
             ) as session:
                 payload = {
                     **payload,
@@ -404,7 +405,7 @@ async def speech(request: Request, user=Depends(get_verified_user)):
         try:
             timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
             async with aiohttp.ClientSession(
-                timeout=timeout, trust_env=True
+                timeout=timeout, trust_env=True,proxy=PROXIES
             ) as session:
                 async with session.post(
                     f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
@@ -466,7 +467,7 @@ async def speech(request: Request, user=Depends(get_verified_user)):
             </speak>"""
             timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
             async with aiohttp.ClientSession(
-                timeout=timeout, trust_env=True
+                timeout=timeout, trust_env=True,proxy=PROXIES
             ) as session:
                 async with session.post(
                     (base_url or f"https://{region}.tts.speech.microsoft.com")
@@ -1037,7 +1038,8 @@ def get_available_models(request: Request) -> list[dict]:
         ):
             try:
                 response = requests.get(
-                    f"{request.app.state.config.TTS_OPENAI_API_BASE_URL}/audio/models"
+                    f"{request.app.state.config.TTS_OPENAI_API_BASE_URL}/audio/models",
+                    proxies=PROXIES
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -1056,6 +1058,7 @@ def get_available_models(request: Request) -> list[dict]:
                     "Content-Type": "application/json",
                 },
                 timeout=5,
+                proxies=PROXIES
             )
             response.raise_for_status()
             models = response.json()
@@ -1083,7 +1086,8 @@ def get_available_voices(request) -> dict:
         ):
             try:
                 response = requests.get(
-                    f"{request.app.state.config.TTS_OPENAI_API_BASE_URL}/audio/voices"
+                    f"{request.app.state.config.TTS_OPENAI_API_BASE_URL}/audio/voices",
+                    proxies=PROXIES
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -1127,7 +1131,7 @@ def get_available_voices(request) -> dict:
                 "Ocp-Apim-Subscription-Key": request.app.state.config.TTS_API_KEY
             }
 
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, proxies=PROXIES)
             response.raise_for_status()
             voices = response.json()
 
@@ -1159,6 +1163,7 @@ def get_elevenlabs_voices(api_key: str) -> dict:
                 "xi-api-key": api_key,
                 "Content-Type": "application/json",
             },
+            proxies=PROXIES
         )
         response.raise_for_status()
         voices_data = response.json()

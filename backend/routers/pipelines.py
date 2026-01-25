@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from starlette.responses import FileResponse
 from typing import Optional
 
-from backend.env import SRC_LOG_LEVELS, AIOHTTP_CLIENT_SESSION_SSL
+from backend.env import PROXIES, SRC_LOG_LEVELS, AIOHTTP_CLIENT_SESSION_SSL
 from backend.config import CACHE_DIR
 from backend.constants import ERROR_MESSAGES
 
@@ -66,7 +66,7 @@ async def process_pipeline_inlet_filter(request, payload, user, models):
     if "pipeline" in model:
         sorted_filters.append(model)
 
-    async with aiohttp.ClientSession(trust_env=True) as session:
+    async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session:
         for filter in sorted_filters:
             urlIdx = filter.get("urlIdx")
 
@@ -111,7 +111,7 @@ async def process_pipeline_outlet_filter(request, payload, user, models):
     if "pipeline" in model:
         sorted_filters = [model] + sorted_filters
 
-    async with aiohttp.ClientSession(trust_env=True) as session:
+    async with aiohttp.ClientSession(trust_env=True,proxy=PROXIES) as session:
         for filter in sorted_filters:
             urlIdx = filter.get("urlIdx")
 
@@ -360,7 +360,7 @@ async def get_pipelines(
         url = request.app.state.config.OPENAI_API_BASE_URLS[urlIdx]
         key = request.app.state.config.OPENAI_API_KEYS[urlIdx]
 
-        r = requests.get(f"{url}/pipelines", headers={"Authorization": f"Bearer {key}"})
+        r = requests.get(f"{url}/pipelines", headers={"Authorization": f"Bearer {key}"}, proxies=PROXIES)
 
         r.raise_for_status()
         data = r.json()

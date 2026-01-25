@@ -29,6 +29,7 @@ def search_firecrawl(
                 "query": query,
                 "limit": count,
             },
+            proxies=PROXIES
         )
         response.raise_for_status()
         results = response.json().get("data", [])

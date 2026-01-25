@@ -458,6 +458,7 @@ from backend.env import (
     EXTERNAL_PWA_MANIFEST_URL,
     AIOHTTP_CLIENT_SESSION_SSL,
     ENABLE_STAR_SESSIONS_MIDDLEWARE,
+    PROXIES
 )
 
 
@@ -518,7 +519,20 @@ log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
 
 
-class SPAStaticFiles(StaticFiles):
+# WebSocket-aware StaticFiles wrapper to prevent ASGI protocol violations
+class WebSocketAwareStaticFiles(StaticFiles):
+    async def __call__(self, scope, receive, send):
+        if scope['type'] == 'websocket':
+            # Reject WebSocket connections to static file paths
+            await send({
+                'type': 'websocket.close',
+                'code': 1002,  # Protocol error
+            })
+            return
+        return await super().__call__(scope, receive, send)
+
+
+class SPAStaticFiles(WebSocketAwareStaticFiles):
     async def get_response(self, path: str, scope):
         try:
             return await super().get_response(path, scope)
@@ -1380,6 +1394,33 @@ async def inspect_websocket(request: Request, call_next):
     return await call_next(request)
 
 
+# Middleware to intercept WebSocket connections to static/SPA paths
+class WebSocketStaticFilesMiddleware:
+    def __init__(self, app):
+        self.app = app
+    
+    async def __call__(self, scope, receive, send):
+        # Intercept WebSocket connections to non-WebSocket paths
+        if scope['type'] == 'websocket':
+            path = scope.get('path', '')
+            # If it's not a /ws path, it's likely a WebSocket to a static file or SPA
+            if not path.startswith('/ws'):
+                # Properly close the WebSocket connection
+                try:
+                    await send({
+                        'type': 'websocket.close',
+                        'code': 1002,  # Protocol error
+                    })
+                except Exception as e:
+                    logging.debug(f"Could not close WebSocket: {e}")
+                return
+        
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(WebSocketStaticFilesMiddleware)
+
+
 # Custom CORSMiddleware wrapper to skip WebSocket requests
 class WebSocketAwareCORSMiddleware(CORSMiddleware):
         async def __call__(self, scope, receive, send):
@@ -1568,11 +1609,15 @@ async def chat_completion(
 ):
     if not request.app.state.MODELS:
         await get_all_models(request, user=user)
-
+    
     model_id = form_data.get("model", None)
+    if model_id not in request.app.state.MODELS:
+        for model in request.app.state.MODELS:
+            if model_id in model:
+                model_id = model
+
     model_item = form_data.pop("model_item", {})
     tasks = form_data.pop("background_tasks", None)
-
     metadata = {}
     try:
         if not model_item.get("direct", False):
@@ -1665,8 +1710,7 @@ async def chat_completion(
             form_data, metadata, events = await process_chat_payload(
                 request, form_data, user, metadata, model
             )
-
-            response = await chat_completion_handler(request, form_data, user)
+            response = await chat_completion_handler(request, form_data, user)    
             if metadata.get("chat_id") and metadata.get("message_id"):
                 try:
                     if not metadata["chat_id"].startswith("local:"):
@@ -1679,7 +1723,6 @@ async def chat_completion(
                         )
                 except:
                     pass
-
             return await process_chat_response(
                 request, response, form_data, user, metadata, model, events, tasks
             )
@@ -1741,7 +1784,8 @@ async def chat_completion(
         )
         return {"status": True, "task_id": task_id}
     else:
-        return await process_chat(request, form_data, user, metadata, model)
+        text = await process_chat(request, form_data, user, metadata, model)
+        return text
 
 
 # Alias for chat_completion (Legacy)
@@ -2024,7 +2068,7 @@ async def get_app_latest_release_version(user=Depends(get_verified_user)):
         return {"current": VERSION, "latest": VERSION}
     try:
         timeout = aiohttp.ClientTimeout(total=1)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True, proxy=PROXIES) as session:
             async with session.get(
                 "https://api.github.com/repos/open-webui/open-webui/releases/latest",
                 ssl=AIOHTTP_CLIENT_SESSION_SSL,
@@ -2182,7 +2226,7 @@ async def oauth_login_callback(provider: str, request: Request, response: Respon
 @app.get("/manifest.json")
 async def get_manifest_json():
     if app.state.EXTERNAL_PWA_MANIFEST_URL:
-        return requests.get(app.state.EXTERNAL_PWA_MANIFEST_URL).json()
+        return requests.get(app.state.EXTERNAL_PWA_MANIFEST_URL,proxies=PROXIES).json()
     else:
         return {
             "name": app.state.WEBUI_NAME,
@@ -2239,7 +2283,7 @@ async def healthcheck_with_db():
     return {"status": True}
 
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/static", WebSocketAwareStaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/cache/{path:path}")

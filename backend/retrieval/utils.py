@@ -34,6 +34,7 @@ from backend.retrieval.loaders.youtube import YoutubeLoader
 
 
 from backend.env import (
+    PROXIES,
     SRC_LOG_LEVELS,
     OFFLINE_MODE,
     ENABLE_FORWARD_USER_INFO_HEADERS,
@@ -862,6 +863,7 @@ def generate_openai_batch_embeddings(
                     else {}
                 ),
             },
+            proxies=PROXIES,
             json=json_data,
         )
         r.raise_for_status()
@@ -912,6 +914,7 @@ def generate_azure_openai_batch_embeddings(
                     ),
                 },
                 json=json_data,
+                proxies=PROXIES
             )
             if r.status_code == 429:
                 retry = float(r.headers.get("Retry-After", "1"))
@@ -962,6 +965,7 @@ def generate_ollama_batch_embeddings(
                 ),
             },
             json=json_data,
+            proxies=PROXIES
         )
         r.raise_for_status()
         data = r.json()

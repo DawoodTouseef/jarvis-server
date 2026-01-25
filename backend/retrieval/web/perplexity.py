@@ -69,7 +69,7 @@ def search_perplexity(
         }
 
         # Make the API request
-        response = requests.request("POST", url, json=payload, headers=headers)
+        response = requests.request("POST", url, json=payload, headers=headers, proxies=PROXIES)
 
         # Parse the JSON response
         json_response = response.json()

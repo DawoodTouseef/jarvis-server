@@ -110,10 +110,6 @@ export default function DashboardPage() {
     return `${Math.floor(seconds / 86400)} days ago`;
   };
 
-  // Monitor stats changes for debugging
-  useEffect(() => {
-    console.log("Stats updated:", stats);
-  }, [stats]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -122,21 +118,14 @@ export default function DashboardPage() {
         
         // Fetch all data in parallel for better performance
         const [
-          userMetricsResponse,
           modelsResponse,
           knowledgeResponse,
-          apiMetricsResponse,
-          systemMetricsResponse,
           chatsResponse,
-          entityMetricsResponse
         ] = await Promise.allSettled([
-          apiClient.getUserMetrics(),
+
           apiClient.getModels(),
           apiClient.getKnowledgeBases(),
-          apiClient.getApiRequestMetrics(),
-          apiClient.getSystemMetrics(),
           apiClient.getChats(),
-          apiClient.getEntityStateMetrics()
         ]);
 
         // Initialize updated stats with current values, preserving icons
@@ -150,32 +139,15 @@ export default function DashboardPage() {
       
         let hasErrors = false;
 
-        // Process user metrics
-        if (userMetricsResponse.status === "fulfilled" && userMetricsResponse.value.success && userMetricsResponse.value.data) {
-          const userMetrics = userMetricsResponse.value.data;
-          console.log("User metrics data received:", userMetrics);
-          const newValue = userMetrics.active_users || 0;
-          console.log("Setting Active Chats value to:", newValue);
-          updatedStats[0] = {
-            ...updatedStats[0],
-            value: newValue,
-            change: `+${userMetrics.new_users_today || 0}`
-          };
-          console.log("Updated Active Chats stat:", updatedStats[0]);
-        } else {
-          hasErrors = true;
-        }
-
         // Process models
         if (modelsResponse.status === "fulfilled" && modelsResponse.value.success && modelsResponse.value.data) {
           const newValue = modelsResponse.value.data.length || 0;
-          console.log("Setting Models value to:", newValue);
+
           updatedStats[1] = {
             ...updatedStats[1],
             value: newValue,
             change: "+0"
           };
-          console.log("Updated Models stat:", updatedStats[1]);
         } else {
           hasErrors = true;
         }
@@ -194,59 +166,8 @@ export default function DashboardPage() {
         } else {
           hasErrors = true;
         }
-
-        // Process entity metrics
-        if (entityMetricsResponse.status === "fulfilled" && entityMetricsResponse.value.success && entityMetricsResponse.value.data) {
-          const entityMetrics = entityMetricsResponse.value.data;
-          console.log("Entity metrics data received:", entityMetrics);
-          
-          // Update entities count
-          updatedStats[3] = {
-            ...updatedStats[3],
-            value: entityMetrics.total_entities || 0,
-            change: `+${entityMetrics.recent_state_changes || 0}`
-          };
-          
-          // Count devices (entities with 'switch', 'light', 'sensor' domains)
-          let deviceCount = 0;
-          const deviceDomains = ['switch', 'light', 'sensor', 'binary_sensor', 'cover', 'climate'];
-          Object.entries(entityMetrics.domains || {}).forEach(([domain, count]) => {
-            if (deviceDomains.includes(domain)) {
-              deviceCount += count;
-            }
-          });
-          
-          updatedStats[4] = {
-            ...updatedStats[4],
-            value: deviceCount,
-            change: "+0"
-          };
-        } else {
-          hasErrors = true;
-        }
-
         setStats(updatedStats);
       
-        // Process system metrics
-        if (systemMetricsResponse.status === "fulfilled" && systemMetricsResponse.value.success && systemMetricsResponse.value.data) {
-          const systemMetrics = systemMetricsResponse.value.data;
-          setSystemStatus(prev => ({
-            ...prev,
-            storageUsed: `${(systemMetrics.memory * 0.1).toFixed(1)} GB / 10 GB`,
-            storagePercentage: systemMetrics.memory,
-            activeConnections: `${Math.floor(systemMetrics.cpu * 0.5)} / 50`,
-            connectionsPercentage: systemMetrics.cpu * 0.5
-          }));
-        }
-
-        // Process API metrics
-        if (apiMetricsResponse.status === "fulfilled" && apiMetricsResponse.value.success && apiMetricsResponse.value.data) {
-          const apiMetrics = apiMetricsResponse.value.data;
-          setSystemStatus(prev => ({
-            ...prev,
-            apiResponseTime: `${apiMetrics.avg_response_time || 0}ms`
-          }));
-        }
 
         // Process chats for activity
         if (chatsResponse.status === "fulfilled" && chatsResponse.value.success && chatsResponse.value.data) {
@@ -259,13 +180,7 @@ export default function DashboardPage() {
           }));
           setRecentActivity(activityData);
         } else {
-          // Fallback to demo data if chat fetching fails
-          setRecentActivity([
-            { id: "1", title: "Chat session started", description: "GPT-4 Conversation", time: "2 min ago", model: "GPT-4" },
-            { id: "2", title: "Document uploaded", description: "Knowledge Base", time: "15 min ago", model: "RAG System" },
-            { id: "3", title: "Pipeline executed", description: "Task Automation", time: "1 hour ago", model: "Workflow" },
-            { id: "4", title: "Model configured", description: "Claude 3", time: "2 hours ago", model: "AI Model" },
-          ]);
+          hasErrors = true
         }
 
         if (hasErrors) {
@@ -288,7 +203,6 @@ export default function DashboardPage() {
     
     fetchData();
   }, []);
-
   // Loading state UI
   if (loading) {
     return (

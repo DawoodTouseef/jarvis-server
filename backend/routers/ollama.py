@@ -23,6 +23,7 @@ from backend.models.users import UserModel
 
 from backend.env import (
     ENABLE_FORWARD_USER_INFO_HEADERS,
+    PROXIES,
 )
 
 from fastapi import (
@@ -126,7 +127,6 @@ async def send_post_request(
     user: UserModel = None,
     metadata: Optional[dict] = None,
 ):
-
     r = None
     try:
         session = aiohttp.ClientSession(
@@ -244,6 +244,7 @@ async def verify_connection(
     async with aiohttp.ClientSession(
         trust_env=True,
         timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST),
+        proxy=PROXIES
     ) as session:
         try:
             async with session.get(
@@ -366,7 +367,7 @@ async def get_all_models(request: Request, user: UserModel = None):
 
                 if enable:
                     request_tasks.append(
-                        send_get_request(f"{url}/api/tags", key, user=user)
+                        send_get_request(f"{str(url).rstrip('/')}/api/tags", key, user=user)
                     )
                 else:
                     request_tasks.append(asyncio.ensure_future(asyncio.sleep(0, None)))
@@ -1373,7 +1374,7 @@ async def generate_chat_completion(
         payload["model"] = payload["model"].replace(f"{prefix_id}.", "")
 
     return await send_post_request(
-        url=f"{url}/api/chat",
+        url=f"{str(url).rstrip('/')}/api/chat",
         payload=json.dumps(payload),
         stream=form_data.stream,
         key=get_api_key(url_idx, url, request.app.state.config.OLLAMA_API_CONFIGS),
@@ -1681,7 +1682,7 @@ async def download_file_stream(
 
     timeout = aiohttp.ClientTimeout(total=600)  # Set the timeout
 
-    async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=True,proxy=PROXIES) as session:
         async with session.get(
             file_url, headers=headers, ssl=AIOHTTP_CLIENT_SESSION_SSL
         ) as response:
@@ -1805,7 +1806,7 @@ async def upload_model(
             # --- P3: Upload to ollama /api/blobs ---
             with open(file_path, "rb") as f:
                 url = f"{ollama_url}/api/blobs/sha256:{file_hash}"
-                response = requests.post(url, data=f)
+                response = requests.post(url, data=f, proxies=PROXIES)
 
             if response.ok:
                 log.info(f"Uploaded to /api/blobs")  # DEBUG

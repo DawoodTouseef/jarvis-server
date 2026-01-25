@@ -8,6 +8,8 @@ from typing import List, Optional
 from langchain_core.documents import Document
 from fastapi import HTTPException, status
 
+from backend.env import PROXIES
+
 log = logging.getLogger(__name__)
 
 
@@ -118,6 +120,7 @@ class MinerULoader:
                     data=form_data,
                     files=files,
                     timeout=300,  # 5 minute timeout for large documents
+                    proxies=PROXIES
                 )
                 response.raise_for_status()
 
@@ -320,6 +323,7 @@ class MinerULoader:
                     upload_url,
                     data=f,
                     timeout=300,  # 5 minute timeout for large files
+                    proxies=PROXIES
                 )
                 response.raise_for_status()
         except FileNotFoundError:
@@ -364,6 +368,7 @@ class MinerULoader:
                     f"{self.api_url}/extract-results/batch/{batch_id}",
                     headers=headers,
                     timeout=30,
+                    proxies=PROXIES
                 )
                 response.raise_for_status()
             except requests.HTTPError as e:
@@ -448,7 +453,7 @@ class MinerULoader:
         log.info(f"Downloading results from: {zip_url}")
 
         try:
-            response = requests.get(zip_url, timeout=60)
+            response = requests.get(zip_url, timeout=60,proxies=PROXIES)
             response.raise_for_status()
         except requests.HTTPError as e:
             raise HTTPException(
