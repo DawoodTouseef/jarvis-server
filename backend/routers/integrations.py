@@ -8,17 +8,17 @@ from fastapi import APIRouter, HTTPException, Depends, status, Query
 from sqlalchemy.orm import Session
 
 from backend.models.integrations import Integration
-from jarvis_integrations import (
+from jarvis_integrations.integrations import (
     IntegrationManager,
     IntegrationManifest,
 )
-from jarvis_integrations.schemas import (
+from jarvis_integrations.integrations.schemas import (
     IntegrationResponse,
     IntegrationListResponse,
     IntegrationCreateRequest,
     IntegrationUpdateRequest
 )
-from jarvis_integrations.exceptions import (
+from jarvis_integrations.integrations.exceptions import (
     IntegrationError,
     IntegrationNotFoundError,
 )

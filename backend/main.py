@@ -98,6 +98,7 @@ from backend.routers import (
     enhanced_dashboard,
     containers,
     integrations,
+    observability,
 )
 from backend.routers.retrieval import (
     get_embedding_function,
@@ -106,7 +107,7 @@ from backend.routers.retrieval import (
     get_rf,
 )
 
-from backend.internal.db import Session, engine
+from backend.internal.db import Session, engine, Base
 
 from backend.models.functions import Functions
 from backend.models.models import Models
@@ -494,6 +495,7 @@ from backend.utils.oauth import (
 )
 from backend.utils.security_headers import SecurityHeadersMiddleware
 from backend.utils.redis import get_redis_connection
+from backend.utils.observability import ObservabilityMiddleware
 
 from backend.tasks import (
     redis_task_command_listener,
@@ -518,6 +520,9 @@ if SAFE_MODE:
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MAIN"])
+
+# Create tables if they don't exist
+Base.metadata.create_all(bind=engine)
 
 
 # WebSocket-aware StaticFiles wrapper to prevent ASGI protocol violations
@@ -1357,6 +1362,7 @@ class RedirectMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(RedirectMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ObservabilityMiddleware)
 
 
 @app.middleware("http")
@@ -1458,11 +1464,12 @@ app.include_router(auths.router, prefix="/api/v1/auths", tags=["auths"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 
 
-app.include_router(channels.router, prefix="/api/v1/channels", tags=["channels"])
-app.include_router(chats.router, prefix="/api/v1/chats", tags=["chats"])
+app.include_router(containers.router, prefix="/api/v1", tags=["containers"])
+app.include_router(integrations.router, prefix="/api/v1", tags=["integrations"])
+app.include_router(observability.router, prefix="/api/v1", tags=["observability"])
 app.include_router(notes.router, prefix="/api/v1/notes", tags=["notes"])
 
-
+app.include_router(chats.router, prefix="/api/v1/chats", tags=["chats"])
 app.include_router(models.router, prefix="/api/v1/models", tags=["models"])
 app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["knowledge"])
 app.include_router(prompts.router, prefix="/api/v1/prompts", tags=["prompts"])
@@ -1495,7 +1502,7 @@ app.include_router(enhanced_dashboard.router, prefix="/api/v1/enhanced-dashboard
 app.include_router(containers.router, prefix="/api/v1/containers", tags=["Containers"])
 
 # Integration Management API
-from jarvis_integrations import IntegrationManager
+from jarvis_integrations.integrations import IntegrationManager
 _integration_manager = IntegrationManager()
 integrations.init_integration_manager(_integration_manager)
 app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations"])

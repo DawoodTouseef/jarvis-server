@@ -93,6 +93,7 @@ class StatisticsRuns(Base):
 class Events(Base):
     __tablename__ = "events"
 
+
     event_id = Column(Integer, primary_key=True)
     event_type = Column(Text)
     event_data = Column(Text)
@@ -246,7 +247,7 @@ class Area(Base):
 
 class SubArea(Base):
     __tablename__ = "sub_areas"
-
+    __table_args__ = {"extend_existing": True}
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     area_id = Column(Integer, ForeignKey("areas.id", ondelete="RESTRICT"), nullable=False)
