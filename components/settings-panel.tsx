@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { User, Bell, Shield,  Save, Upload,Settings,Lock ,Copy,EyeOff,Eye,AudioLines,Download ,Home, Plus, Edit, Trash2, Building, MapPin, Layers, Heart, Camera,
-  Earth
+  Earth,PlugIcon,
+  Cloud
  } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { apiClient } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 import { UserList } from "./Userlist"
+import { IntegrationsManager } from "./integrations-manager"
 import { Slider } from "./ui/slider"
 import { Switch } from "./ui/switch"
 
@@ -110,7 +112,7 @@ const IconMap: Record<string, React.ComponentType<any>> = {
   Trash2,
   Shield
 };
-
+import {integrations} from "@/lib/api";
 export function SettingsPanel() {
   const [user, setUser] = useState<User>({} as User)
   const [originalUser, setOriginalUser] = useState<User>({} as User)
@@ -122,6 +124,7 @@ export function SettingsPanel() {
       ENGINE: "web"
     }
   });
+  const [apikey,setapikey] = useState("");
   const [showchange, setShowChange]= useState(false);
   const [showchange1, setShowChange1]= useState(false);
   const [hideapi, setHideApiKey]= useState(true);
@@ -172,6 +175,7 @@ export function SettingsPanel() {
     accentColor: "cyan",
     animations: true,
   })
+  const [integrations, setIntegrations] = useState<integrations[]>([]);
   const [allusers, setAllUsers] = useState<UserTableItem[]>([]);
   const [isWebsearchEnabled, setWebsearchEnabled] = useState(false);
   const [byPassEmbedding, setByPassEmbedding] = useState(false);
@@ -259,6 +263,17 @@ export function SettingsPanel() {
       fetchaudioconfig();
 
       loadHomeStructure();
+      setIntegrations(
+        [{
+          id: "1",
+          name: "Sample Integration",
+          type: "API",
+          enabled: true,
+          icon: "Cloud",
+          description: "This is a sample integration for demonstration purposes.",
+          config: {}
+        }]
+      )
     }, [])
 
   // Load home structure data
@@ -268,7 +283,20 @@ export function SettingsPanel() {
     await loadHomeAreas();
     await loadHomeSubAreas();
   }
-
+  const generate_api_key = ()=>{
+    apiClient.generate_api_key().then((response)=>{
+      if(response.success && response.data){
+        setapikey(response.data.api_key);
+      }
+    }).catch((error)=>{
+      console.error("Error generating API key:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate API key",
+        variant: "destructive"
+      })
+    })
+  }
   // Load home floors data
   const loadHomeFloors = async () => {
     try {
@@ -829,6 +857,10 @@ export function SettingsPanel() {
             <Earth className="w-4 h-4 mr-2" />
             Web Search
           </TabsTrigger>
+          <TabsTrigger value="integrations" className="data-[state=active]:bg-primary/20">
+            <PlugIcon className="w-4 h-4 mr-2" />
+            Integrations
+          </TabsTrigger>
             </>
           )}
         </TabsList>
@@ -957,11 +989,30 @@ export function SettingsPanel() {
                     <Copy className="w-4 h-4 mr-2" />
                   </Button>
                 </div>
-                <div className="flex gap-2"> 
-                <Label>API Key</Label>
-                <div className="flex gap-3">
-                  <Button className="glass border-primary/30 bg-transparent">Create a neew secret Key</Button>
-                </div>
+                  <div className="flex items-center justify-between mt-4"> 
+                  <Label>API Key</Label>
+                
+                  <Button className="glass border-primary/30 bg-transparent"
+                  onClick={()=>{generate_api_key()}}
+                  >Create a new secret Key</Button>
+
+                  </div>
+                  <div>
+                      <div className="flex gap-2">
+                        <Input
+                    type={hideapi ? 'password' : 'text'}
+                    value={apikey || ""}
+                    readOnly
+                    className="glass border-primary/20"
+                  />
+                  <Button variant="outline" className="glass border-primary/30 bg-transparent" onClick={() => setHideApiKey(!hideapi)}>
+                    {hideapi ? <Eye className="w-4 h-4 mr-2" /> : <EyeOff className="w-4 h-4 mr-2" />}
+                  </Button>
+                  <Button variant="outline" className="glass border-primary/30 bg-transparent" onClick={() => copyToClipboard(apikey || "")}>
+                    <Copy className="w-4 h-4 mr-2" />
+                  </Button>
+
+                      </div>
                 </div>
                 <p className="text-xs text-muted-foreground">Keep your API key secure and never share it publicly</p>
                       </>
@@ -2108,6 +2159,9 @@ export function SettingsPanel() {
               </Button>
             </div>
           </Card>
+        </TabsContent>
+        <TabsContent value="integrations" className="space-y-6">
+          <IntegrationsManager />
         </TabsContent>
       </Tabs>
       

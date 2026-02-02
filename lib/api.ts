@@ -34,26 +34,161 @@ interface ApiResponse<T> {
   error?: string
   message?: string
 }
+interface integrations {
+  id: string
+  name: string
+  type: string
+  enabled: boolean
+  icon: string
+  description: string
+  config: Object
+}
+// enums.ts
+export enum IntegrationStatus {
+  INSTALLED = "installed",
+  NOT_INSTALLED = "not_installed",
+  ENABLED = "enabled",
+  DISABLED = "disabled",
+  ERROR = "error",
+}
+
+export enum IntegrationPermission {
+  READ = "read",
+  WRITE = "write",
+  EXECUTE = "execute",
+  DELETE = "delete",
+  ADMIN = "admin",
+}
+
+export interface IntegrationRequirement {
+  name: string;
+  version?: string;
+  type?: string; // default: "python"
+}
+
+export interface IntegrationAPIRoute {
+  path: string;
+  method?: string; // default: "GET"
+  description?: string;
+  requires_auth?: boolean; // default: true
+  permissions?: IntegrationPermission[]; // default: [IntegrationPermission.READ]
+}
+
+export interface IntegrationManifest {
+  id: string;
+  name: string;
+  version: string;
+  author: string;
+  description: string;
+  category?: string; // default: "other"
+  documentation_url?: string;
+  support_url?: string;
+  repository_url?: string;
+  issues_url?: string;
+  logo_url?: string;
+  icon?: string;
+  keywords?: string[]; // default: []
+  requirements?: IntegrationRequirement[]; // default: []
+  api_routes?: IntegrationAPIRoute[]; // default: []
+  config_schema?: Record<string, any>;
+  home_assistant_compatible?: boolean; // default: false
+  minimum_jarvis_version?: string; // default: "0.1.0"
+  maximum_jarvis_version?: string;
+}
+
+export interface IntegrationSchema {
+  id: string;
+  manifest_id: string;
+  name: string;
+  description: string;
+  author: string;
+  version: string;
+  enabled?: boolean; // default: true
+  installed?: boolean; // default: true
+  status?: IntegrationStatus; // default: IntegrationStatus.INSTALLED
+  category: string;
+  icon?: string;
+  config?: Record<string, any>; // default: {}
+  integration_metadata?: Record<string, any>; // default: {}
+  installed_at?: Date; // default: new Date()
+  updated_at?: Date; // default: new Date()
+  last_error?: string;
+}
+
+export interface IntegrationCreateRequest {
+  manifest: IntegrationManifest;
+  config?: Record<string, any>; // default: {}
+}
+
+export interface IntegrationUpdateRequest {
+  enabled?: boolean;
+  config?: Record<string, any>;
+}
+
+export interface IntegrationResponse {
+  id: string;
+  manifest_id: string;
+  name: string;
+  description: string;
+  author: string;
+  version: string;
+  enabled: boolean;
+  installed: boolean;
+  status: IntegrationStatus;
+  category: string;
+  icon?: string;
+  config: Record<string, any>;
+  integration_metadata: Record<string, any>;
+  installed_at: Date;
+  updated_at: Date;
+  last_error?: string;
+}
+
+export interface IntegrationListResponse {
+  integrations: IntegrationResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface ServiceDefinition {
+  name: string;
+  description: string;
+  fields?: Record<string, any>; // default: {}
+}
+
+export interface EventDefinition {
+  name: string;
+  description: string;
+  data_schema?: Record<string, any>;
+}
+
+export interface BackgroundTaskDefinition {
+  name: string;
+  description: string;
+  interval?: number; // in seconds
+  enabled_by_default?: boolean; // default: true
+}
 
 interface HasUsersResponse {
   has_users: boolean
 }
 interface Groups {
-  model_config :any
-    id: string
-    user_id: string
+  model_config: any
+  id: string
+  user_id: string
 
-    name: string
-    description: string
+  name: string
+  description: string
 
-    data: Object
-    meta: Object
+  data: Object
+  meta: Object
 
-    permissions: Object
-    user_ids: Array<string>
+  permissions: Object
+  user_ids: Array<string>
 
-    created_at:number
-    updated_at: number
+  created_at: number
+  updated_at: number
 }
 interface LoginCredentials {
   email: string
@@ -207,8 +342,8 @@ export interface ApiUserSettings {
     webhookUrl: string
   }
   api: {
-    keys: Array<{id: string, name: string, key: string, createdAt: string, lastUsed: string}>
-    quota: {used: number, limit: number}
+    keys: Array<{ id: string, name: string, key: string, createdAt: string, lastUsed: string }>
+    quota: { used: number, limit: number }
   }
   notifications: {
     email: boolean
@@ -425,53 +560,10 @@ interface Area {
   icon?: string;
 }
 
-interface HomeAssistantLocationConfig {
-  latitude: number;
-  longitude: number;
-  elevation?: number;
-  unit_system?: string;
-  time_zone?: string;
-  location_name?: string;
-}
 
-interface HomeAssistantAutomation {
-  automation_id: string;
-  name: string;
-  description?: string;
-  enabled: boolean;
-  trigger: any[];
-  condition?: any[];
-  action: any[];
-  mode?: string;
-  max_exceeded?: string;
-  variables?: Record<string, any>;
-  last_triggered?: string;
-  created: string;
-  updated: string;
-}
 
-interface HomeAssistantConfig {
-  // Configuration options for Home Assistant integration
-  enabled: boolean;
-  url?: string;
-  api_key?: string;
-  polling_interval?: number;
-}
 
-interface HomeAssistantAddon {
-  id: number
-  addon_id: string
-  name: string
-  description: string | null
-  version: string
-  enabled: boolean
-  config: any | null
-  manifest: any | null
-  installed_at: string
-  updated_at: string
-  repository_url: string | null
-  installed_from: string | null
-}
+
 
 // Enhanced Dashboard Interfaces
 interface ModelPerformanceMetrics {
@@ -609,10 +701,10 @@ export default class ApiClient {
       ...options.headers,
     }
 
-    if (this.token) { 
+    if (this.token) {
       (headers as Record<string, string>).Authorization = `Bearer ${this.token}`
     }
-    
+
     try {
       const response = await fetch(url, {
         ...options,
@@ -664,6 +756,13 @@ export default class ApiClient {
 
     return response
   }
+
+  async generate_api_key(): Promise<ApiResponse<{ api_key: string }>> {
+    return this.request<{ api_key: string }>("/api/v1/auths/api_key", {
+      method: "POST",
+    })
+  }
+
 
 
   async logout(): Promise<ApiResponse<void>> {
@@ -728,11 +827,11 @@ export default class ApiClient {
     // Simple rate limiting: delay if requests are too frequent
     const now = Date.now();
     const timeSinceLastRequest = now - (this as any)._lastRequestTime || 0;
-    
+
     if (timeSinceLastRequest < 100) { // Minimum 100ms between requests
       await new Promise(resolve => setTimeout(resolve, 100 - timeSinceLastRequest));
     }
-    
+
     (this as any)._lastRequestTime = Date.now();
     return this.request<T>(endpoint, options);
   }
@@ -805,7 +904,7 @@ export default class ApiClient {
     })
   }
 
-  
+
   async getModelsConfig(): Promise<ApiResponse<ModelsConfig>> {
     return this.request<ModelsConfig>("/api/v1/configs/models")
   }
@@ -868,14 +967,14 @@ export default class ApiClient {
       method: "GET",
     })
   }
-  
+
   async addUser(userData: AddUserForm): Promise<ApiResponse<SignupResponse>> {
     return this.request<SignupResponse>("/api/v1/auths/add", {
       method: "POST",
       body: JSON.stringify(userData),
     })
   }
-  
+
   async getAllUsers(): Promise<ApiResponse<any[]>> {
     return this.request<any[]>("/api/v1/users/all", {
       method: "GET",
@@ -898,7 +997,7 @@ export default class ApiClient {
       body: JSON.stringify(userData),
     })
   }
-  
+
   async deleteUser(userId: string): Promise<ApiResponse<boolean>> {
     return this.request<boolean>(`/api/v1/users/${userId}`, {
       method: "DELETE",
@@ -960,8 +1059,8 @@ export default class ApiClient {
 
   // Ollama Models
   async getOllamaModels(urlIdx?: number): Promise<ApiResponse<any>> {
-    const endpoint = urlIdx !== undefined 
-      ? `/ollama/api/tags/${urlIdx}` 
+    const endpoint = urlIdx !== undefined
+      ? `/ollama/api/tags/${urlIdx}`
       : "/ollama/api/tags";
     return this.request<any>(endpoint, {
       method: "GET",
@@ -991,8 +1090,8 @@ export default class ApiClient {
 
   // OpenAI Models
   async getOpenAIModels(urlIdx?: number): Promise<ApiResponse<any>> {
-    const endpoint = urlIdx !== undefined 
-      ? `/openai/models/${urlIdx}` 
+    const endpoint = urlIdx !== undefined
+      ? `/openai/models/${urlIdx}`
       : "/openai/models";
     return this.request<any>(endpoint, {
       method: "GET",
@@ -1105,9 +1204,9 @@ export default class ApiClient {
       formData.append('file', file)
 
       const url = `${this.baseUrl}/api/v1/files/`
-      
+
       const headers: HeadersInit = {}
-      if (this.token) { 
+      if (this.token) {
         headers.Authorization = `Bearer ${this.token}`
       }
 
@@ -1196,10 +1295,10 @@ export default class ApiClient {
         method: "POST",
         body: JSON.stringify({ file_id: fileId }),
       });
-      
+
       // Log the full response for debugging
       console.log("Add file to knowledge base response:", response);
-      
+
       return response;
     } catch (error) {
       console.error("Error adding file to knowledge base:", error);
@@ -1267,7 +1366,7 @@ export default class ApiClient {
   async getHomeAssistantEntityHistory(entityId: string, startTime: string, endTime?: string): Promise<ApiResponse<EntityState[]>> {
     const params = new URLSearchParams({ start_time: startTime });
     if (endTime) params.append("end_time", endTime);
-    
+
     return this.request<EntityState[]>(`/api/v1/homeassistant/states/${entityId}/history?${params.toString()}`, {
       method: "GET",
     })
@@ -1276,7 +1375,7 @@ export default class ApiClient {
   async getHomeAssistantEvents(eventType?: string): Promise<ApiResponse<any[]>> {
     const params = new URLSearchParams();
     if (eventType) params.append("event_type", eventType);
-    
+
     return this.request<any[]>(`/api/v1/homeassistant/events?${params.toString()}`, {
       method: "GET",
     })
@@ -1299,7 +1398,7 @@ export default class ApiClient {
   async getHomeAssistantEntitiesRegistry(domain?: string): Promise<ApiResponse<any[]>> {
     const params = new URLSearchParams();
     if (domain) params.append("domain", domain);
-    
+
     return this.request<any[]>(`/api/v1/homeassistant/registry/entities?${params.toString()}`, {
       method: "GET",
     })
@@ -1420,7 +1519,7 @@ export default class ApiClient {
   async getHomeAssistantStatistics(statisticId: string, startTime: string, endTime?: string): Promise<ApiResponse<any[]>> {
     const params = new URLSearchParams({ start_time: startTime });
     if (endTime) params.append("end_time", endTime);
-    
+
     return this.request<any[]>(`/api/v1/homeassistant/statistics/${statisticId}?${params.toString()}`, {
       method: "GET",
     })
@@ -1446,204 +1545,18 @@ export default class ApiClient {
     })
   }
 
-  // Home Assistant Location Methods
-  async getHomeAssistantLocation(): Promise<ApiResponse<HomeAssistantLocationConfig>> {
-    return this.request<HomeAssistantLocationConfig>("/api/v1/homeassistant/location", {
-      method: "GET",
-    })
-  }
-
-  async updateHomeAssistantLocation(locationData: HomeAssistantLocationConfig): Promise<ApiResponse<HomeAssistantLocationConfig>> {
-    return this.request<HomeAssistantLocationConfig>("/api/v1/homeassistant/location", {
-      method: "POST",
-      body: JSON.stringify(locationData),
-    })
-  }
-
-  async getHomeAssistantConfig(): Promise<ApiResponse<Record<string, any>>> {
-    return this.request<Record<string, any>>("/api/v1/homeassistant/config", {
-      method: "GET",
-    })
-  }
-
-  // Home Assistant Automation Methods
-  async getHomeAssistantAutomations(): Promise<ApiResponse<HomeAssistantAutomation[]>> {
-    return this.request<HomeAssistantAutomation[]>("/api/v1/homeassistant/automations", {
-      method: "GET",
-    })
-  }
-
-  async getHomeAssistantAutomation(automationId: string): Promise<ApiResponse<HomeAssistantAutomation>> {
-    return this.request<HomeAssistantAutomation>(`/api/v1/homeassistant/automations/${automationId}`, {
-      method: "GET",
-    })
-  }
-
-  async createHomeAssistantAutomation(automationData: any): Promise<ApiResponse<HomeAssistantAutomation>> {
-    return this.request<HomeAssistantAutomation>("/api/v1/homeassistant/automations", {
-      method: "POST",
-      body: JSON.stringify(automationData),
-    })
-  }
-
-  async updateHomeAssistantAutomation(automationId: string, automationData: any): Promise<ApiResponse<HomeAssistantAutomation>> {
-    return this.request<HomeAssistantAutomation>(`/api/v1/homeassistant/automations/${automationId}`, {
-      method: "PUT",
-      body: JSON.stringify(automationData),
-    })
-  }
-
-  async deleteHomeAssistantAutomation(automationId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/automations/${automationId}`, {
-      method: "DELETE",
-    })
-  }
-
-  async triggerHomeAssistantAutomation(automationId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/automations/${automationId}/trigger`, {
-      method: "POST",
-    })
-  }
-
-  async enableHomeAssistantAutomation(automationId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/automations/${automationId}/enable`, {
-      method: "POST",
-    })
-  }
-
-  async disableHomeAssistantAutomation(automationId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/automations/${automationId}/disable`, {
-      method: "POST",
-    })
-  }
-
-  // Home Assistant Integration Methods
-  async getHomeAssistantIntegrations(): Promise<ApiResponse<any[]>> {
-    return this.request<any[]>("/api/v1/homeassistant/integrations", {
-      method: "GET",
-    })
-  }
-
-  async getHomeAssistantIntegration(integrationId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/integrations/${integrationId}`, {
-      method: "GET",
-    })
-  }
-
-  async createHomeAssistantIntegration(integrationData: any): Promise<ApiResponse<any>> {
-    return this.request<any>("/api/v1/homeassistant/integrations", {
-      method: "POST",
-      body: JSON.stringify(integrationData),
-    })
-  }
-
-  async updateHomeAssistantIntegration(integrationId: string, integrationData: any): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/integrations/${integrationId}`, {
-      method: "PUT",
-      body: JSON.stringify(integrationData),
-    })
-  }
-
-  async deleteHomeAssistantIntegration(integrationId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/integrations/${integrationId}`, {
-      method: "DELETE",
-    })
-  }
-
-  async enableHomeAssistantIntegration(integrationId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/integrations/${integrationId}/enable`, {
-      method: "POST",
-    })
-  }
-
-  async disableHomeAssistantIntegration(integrationId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/integrations/${integrationId}/disable`, {
-      method: "POST",
-    })
-  }
-
-  async getAvailableIntegrations(): Promise<ApiResponse<any[]>> {
-    return this.request<any[]>("/api/v1/homeassistant/integrations/registry/available", {
-      method: "GET",
-    })
-  }
-
-  async startIntegrationFlow(integrationId: string, configData: any): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/integrations/${integrationId}/start_flow`, {
-      method: "POST",
-      body: JSON.stringify(configData),
-    })
-  }
-
-  // Home Assistant Addon Methods
-  async getHomeAssistantAddons(): Promise<ApiResponse<HomeAssistantAddon[]>> {
-    return this.request<HomeAssistantAddon[]>("/api/v1/homeassistant/addons", {
-      method: "GET",
-    })
-  }
-
-  async getHomeAssistantAddon(addonId: string): Promise<ApiResponse<HomeAssistantAddon>> {
-    return this.request<HomeAssistantAddon>(`/api/v1/homeassistant/addons/${addonId}`, {
-      method: "GET",
-    })
-  }
-
-  async createHomeAssistantAddon(addonData: any): Promise<ApiResponse<HomeAssistantAddon>> {
-    return this.request<HomeAssistantAddon>("/api/v1/homeassistant/addons", {
-      method: "POST",
-      body: JSON.stringify(addonData),
-    })
-  }
-
-  async updateHomeAssistantAddon(addonId: string, addonData: any): Promise<ApiResponse<HomeAssistantAddon>> {
-    return this.request<HomeAssistantAddon>(`/api/v1/homeassistant/addons/${addonId}`, {
-      method: "PUT",
-      body: JSON.stringify(addonData),
-    })
-  }
-
-  async deleteHomeAssistantAddon(addonId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/addons/${addonId}`, {
-      method: "DELETE",
-    })
-  }
-
-  async enableHomeAssistantAddon(addonId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/addons/${addonId}/enable`, {
-      method: "POST",
-    })
-  }
-
-  async disableHomeAssistantAddon(addonId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/addons/${addonId}/disable`, {
-      method: "POST",
-    })
-  }
-
-  async installHomeAssistantAddon(addonId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/addons/${addonId}/install`, {
-      method: "POST",
-    })
-  }
-
-  async uninstallHomeAssistantAddon(addonId: string): Promise<ApiResponse<any>> {
-    return this.request<any>(`/api/v1/homeassistant/addons/${addonId}/uninstall`, {
-      method: "POST",
-    })
-  }
-
   // Deprecated method - replaced with getKnowledgeBases
   async get_knowledge(): Promise<ApiResponse<any>> {
     return this.getKnowledgeBases()
   }
-  
+
   // Deprecated method - replaced with getKnowledgeBases
   async get_knowledge_by_id(): Promise<ApiResponse<any>> {
     return this.request<any>(`/api/v1/knowledge/list`, {
       method: "GET",
     })
   }
-  
+
   // Deprecated method - replaced with createKnowledgeBase
   async create_knowledge(data: any): Promise<ApiResponse<any>> {
     return this.request<any>("/api/v1/knowledge/create", {
@@ -1665,7 +1578,7 @@ export default class ApiClient {
       body: JSON.stringify(config),
     })
   }
-  
+
   // Audio Transcription Method
   async transcribeAudio(file: File): Promise<ApiResponse<any>> {
     // Check if file is empty
@@ -1675,15 +1588,15 @@ export default class ApiClient {
         error: "Selected file is empty. Please choose a valid audio file."
       }
     }
-    
+
     try {
       const formData = new FormData()
       formData.append('file', file)
 
       const url = `${this.baseUrl}/api/v1/audio/transcriptions`
-      
+
       const headers: HeadersInit = {}
-      if (this.token) { 
+      if (this.token) {
         headers.Authorization = `Bearer ${this.token}`
       }
 
@@ -1722,16 +1635,16 @@ export default class ApiClient {
       }
     }
   }
-  
+
   // Text to Speech Method
   async textToSpeech(text: string): Promise<ApiResponse<Blob>> {
     try {
       const url = `${this.baseUrl}/api/v1/audio/speech`
-      
+
       const headers: HeadersInit = {
         "Content-Type": "application/json",
       }
-      if (this.token) { 
+      if (this.token) {
         (headers as Record<string, string>).Authorization = `Bearer ${this.token}`
       }
 
@@ -1750,7 +1663,7 @@ export default class ApiClient {
           const text = await response.text();
           errorData = { message: text };
         }
-        
+
         return {
           success: false,
           error: errorData.message || errorData.detail || errorData.error || `HTTP ${response.status}: ${response.statusText}`
@@ -1771,8 +1684,8 @@ export default class ApiClient {
       }
     }
   }
-  
-  async getgroups():Promise<ApiResponse<any>>{
+
+  async getgroups(): Promise<ApiResponse<any>> {
     return this.request<any>("/api/v1/groups/")
   }
   async addGroup(groupData: any): Promise<ApiResponse<any>> {
@@ -1787,7 +1700,7 @@ export default class ApiClient {
       body: JSON.stringify(groupData),
     })
   }
-  
+
   async deleteGroup(groupId: string): Promise<ApiResponse<any>> {
     return this.request<any>(`/api/v1/groups/id/${groupId}/delete`, {
       method: "DELETE",
@@ -1798,8 +1711,8 @@ export default class ApiClient {
     return this.request<any>("/api/v1/pipelines/list");
   }
   async getPipelineById(id: string, urlIdx?: number): Promise<ApiResponse<Pipeline>> {
-    const url = urlIdx !== undefined 
-      ? `/api/v1/pipelines/?urlIdx=${urlIdx}` 
+    const url = urlIdx !== undefined
+      ? `/api/v1/pipelines/?urlIdx=${urlIdx}`
       : `/api/v1/pipelines/${id}`;
     return this.request<any>(url, {
       method: "GET",
@@ -1809,9 +1722,9 @@ export default class ApiClient {
   async createPipelineByFile(formData: FormData, urlIdx: number): Promise<ApiResponse<Pipeline>> {
     try {
       const url = `${this.baseUrl}/api/v1/pipelines/upload`;
-      
+
       const headers: HeadersInit = {};
-      if (this.token) { 
+      if (this.token) {
         headers.Authorization = `Bearer ${this.token}`;
       }
 
@@ -1860,7 +1773,7 @@ export default class ApiClient {
           error: "Invalid URL provided"
         };
       }
-      
+
       return this.request<Pipeline>("/api/v1/pipelines/add", {
         method: "POST",
         body: JSON.stringify({
@@ -1888,10 +1801,10 @@ export default class ApiClient {
         actualUrlIdx = pipelineInfo ? pipelineInfo.idx : 0;
       }
     }
-    
+
     // Use the backend update endpoint
-    const url = actualUrlIdx !== undefined 
-      ? `/api/v1/pipelines/${id}?urlIdx=${actualUrlIdx}` 
+    const url = actualUrlIdx !== undefined
+      ? `/api/v1/pipelines/${id}?urlIdx=${actualUrlIdx}`
       : `/api/v1/pipelines/${id}`;
     return this.request<Pipeline>(url, {
       method: "POST",
@@ -1910,7 +1823,7 @@ export default class ApiClient {
         actualUrlIdx = pipelineInfo ? pipelineInfo.idx : 0;
       }
     }
-    
+
     // Use the delete endpoint with proper form data
     return this.request<boolean>("/api/v1/pipelines/delete", {
       method: "DELETE",
@@ -2010,6 +1923,12 @@ export default class ApiClient {
       body: JSON.stringify(data),
     });
   }
+  async getIntegrations(limit: Record<number, any>): Promise<ApiResponse<IntegrationResponse[]>> {
+    const params = new URLSearchParams(limit);
+    return this.request<IntegrationResponse[]>(`/api/v1/integrations/`, {
+      method: "GET",
+    });
+  }
 }
 
 export const apiClient = new ApiClient()
@@ -2022,11 +1941,11 @@ if (typeof window !== "undefined") {
   }
 }
 
-export type { 
-  ApiResponse, 
-  SystemMetrics, 
-  ContainerStats, 
-  DeepsearchQuery, 
+export type {
+  ApiResponse,
+  SystemMetrics,
+  ContainerStats,
+  DeepsearchQuery,
   DeepsearchResult,
   LoginCredentials,
   ApiUserSettings as UserSettings,
@@ -2034,8 +1953,7 @@ export type {
   EntityState,
   Entity,
   Area,
-  HomeAssistantConfig,
-  HomeAssistantLocationConfig,
-  HomeAssistantAutomation,
-  HomeAssistantAddon
+  integrations,
+
+
 }

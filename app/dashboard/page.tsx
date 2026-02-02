@@ -23,7 +23,9 @@ import {
   Mic,
   ArrowRight,
   Settings,
-  BarChart3
+  BarChart3,
+  Folder,
+
 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
@@ -97,6 +99,13 @@ export default function DashboardPage() {
       href: "/dashboard/enhanced",
       color: "primary",
     },
+    {
+      title: "Files & Media",
+      description: "Manage your files",
+      icon: Folder,
+      href: "/dashboard/files",
+      color: "primary",
+    }
   ]
 
   // Format time ago
@@ -141,8 +150,7 @@ export default function DashboardPage() {
 
         // Process models
         if (modelsResponse.status === "fulfilled" && modelsResponse.value.success && modelsResponse.value.data) {
-          const newValue = modelsResponse.value.data.length || 0;
-
+          const newValue = modelsResponse.value.data.data.length || 0;
           updatedStats[1] = {
             ...updatedStats[1],
             value: newValue,
@@ -157,7 +165,6 @@ export default function DashboardPage() {
           const totalFiles = knowledgeResponse.value.data.reduce((acc, kb) => {
             return acc + (kb.files ? kb.files.length : 0);
           }, 0);
-
           updatedStats[2] = {
             ...updatedStats[2],
             value: totalFiles,

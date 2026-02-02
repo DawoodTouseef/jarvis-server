@@ -2,8 +2,6 @@
 
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import IntegrationManager from '@/components/homeassistant/integration-manager';
-import DeviceDashboard from '@/components/homeassistant/device-dashboard';
 import { DashboardLayout } from '@/components/dashboard-layout';
 export default function IntegrationsPage() {
   const [activeTab, setActiveTab] = useState('integrations');
@@ -16,18 +14,7 @@ export default function IntegrationsPage() {
         <p className="text-muted-foreground">Manage your smart home integrations and devices</p>
       </div>
       
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="integrations">Integrations</TabsTrigger>
-          <TabsTrigger value="devices">Devices & Entities</TabsTrigger>
-        </TabsList>
-        <TabsContent value="integrations" className="mt-6">
-          <IntegrationManager />
-        </TabsContent>
-        <TabsContent value="devices" className="mt-6">
-          <DeviceDashboard />
-        </TabsContent>
-      </Tabs>
+      
     </div> 
     </DashboardLayout>
   );

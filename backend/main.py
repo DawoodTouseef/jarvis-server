@@ -97,6 +97,7 @@ from backend.routers import (
     analytics,
     enhanced_dashboard,
     containers,
+    integrations,
 )
 from backend.routers.retrieval import (
     get_embedding_function,
@@ -1492,6 +1493,12 @@ app.include_router(enhanced_dashboard.router, prefix="/api/v1/enhanced-dashboard
 
 # Container Management API
 app.include_router(containers.router, prefix="/api/v1/containers", tags=["Containers"])
+
+# Integration Management API
+from jarvis_integrations import IntegrationManager
+_integration_manager = IntegrationManager()
+integrations.init_integration_manager(_integration_manager)
+app.include_router(integrations.router, prefix="/api/v1/integrations", tags=["Integrations"])
 
 
 try:

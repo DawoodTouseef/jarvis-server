@@ -727,7 +727,7 @@ async def extend_signup(request: Request, response: Response, form_data: ExtendS
             from backend.models.home_assistant_controllers import StatesCtrl
             
             # Create entity ID based on user ID
-            entity_id = f"person.{signup_response['name'].replace(' ', '_')}"
+            entity_id = f"person.home"
             
             # Prepare state attributes with location data
             attributes = {
