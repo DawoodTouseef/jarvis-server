@@ -4,6 +4,7 @@ import { AuthGuard } from "@/components/auth-guard"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation";
 import {
   MessageSquare,
   Cpu,
@@ -25,21 +26,17 @@ import {
   Settings,
   BarChart3,
   Folder,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  CheckCircle2,
 
 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
-import { apiClient } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
+import { apiClient, LogEntry } from "@/lib/api"
 
-// Define the activity interface
-interface ActivityItem {
-  id: string;
-  title: string;
-  description: string;
-  time: string;
-  model?: string;
-}
 
 // Define the stats interface
 interface StatItem {
@@ -66,9 +63,12 @@ export default function DashboardPage() {
     activeConnections: "0 / 50",
     connectionsPercentage: 0
   })
+  const navigate = useRouter();
 
-  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([])
+  const [recentActivity, setRecentActivity] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [limit, setLimit] = useState(4)
+  const [refreshInterval, setRefreshInterval] = useState(5000)
 
   const quickActions = [
     {
@@ -105,14 +105,58 @@ export default function DashboardPage() {
       icon: Folder,
       href: "/dashboard/files",
       color: "primary",
+    },
+    {
+      title: "API Observability",
+      description: "Monitor system requests",
+      icon: Activity,
+      href: "/dashboard/observability",
+      color: "primary",
     }
   ]
+  const [logsLoading, setLogsLoading] = useState(true)
 
+  const fetchLogs = async () => {
+    const response = await apiClient.getLogs({ limit })
+    if (response.success && response.data) {
+      setRecentActivity(response.data)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchLogs()
+    const interval = setInterval(fetchLogs, refreshInterval)
+    return () => clearInterval(interval)
+  }, [refreshInterval, limit])
+
+  const getStatusIcon = (status: number) => {
+    if (status < 300) return <CheckCircle2 className="w-3 h-3 text-green-500" />
+    if (status < 500) return <AlertTriangle className="w-3 h-3 text-yellow-500" />
+    return <XCircle className="w-3 h-3 text-red-500" />
+  }
+
+  const getStatusColor = (status: number) => {
+    if (status < 300) return "text-green-500 bg-green-500/10 border-green-500/20"
+    if (status < 400) return "text-blue-500 bg-blue-500/10 border-blue-500/20"
+    if (status < 500) return "text-yellow-500 bg-yellow-500/10 border-yellow-500/20"
+    return "text-red-500 bg-red-500/10 border-red-500/20"
+  }
+
+  const getMethodColor = (method: string) => {
+    switch (method.toUpperCase()) {
+      case "GET": return "text-blue-400"
+      case "POST": return "text-green-400"
+      case "PUT": return "text-yellow-400"
+      case "DELETE": return "text-red-400"
+      default: return "text-gray-400"
+    }
+  }
   // Format time ago
   const formatTimeAgo = (date: Date) => {
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-    
+
     if (seconds < 60) return `${seconds} seconds ago`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
@@ -124,7 +168,7 @@ export default function DashboardPage() {
     const fetchData = async () => {
       try {
         setLoading(true)
-        
+
         // Fetch all data in parallel for better performance
         const [
           modelsResponse,
@@ -145,7 +189,7 @@ export default function DashboardPage() {
           { label: "Entities", value: 0, change: "+0", icon: Home, color: "text-info" },
           { label: "Devices", value: 0, change: "+0", icon: Power, color: "text-warning" },
         ];
-      
+
         let hasErrors = false;
 
         // Process models
@@ -174,7 +218,7 @@ export default function DashboardPage() {
           hasErrors = true;
         }
         setStats(updatedStats);
-      
+
 
         // Process chats for activity
         if (chatsResponse.status === "fulfilled" && chatsResponse.value.success && chatsResponse.value.data) {
@@ -185,6 +229,7 @@ export default function DashboardPage() {
             time: chat.updated_at ? formatTimeAgo(new Date(chat.updated_at)) : "Just now",
             model: "Chat"
           }));
+
           setRecentActivity(activityData);
         } else {
           hasErrors = true
@@ -207,7 +252,7 @@ export default function DashboardPage() {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
   // Loading state UI
@@ -352,7 +397,7 @@ export default function DashboardPage() {
             <Card className="glass border-primary/20 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold">Recent Activity</h2>
-                <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
+                <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80" onClick={() => navigate.push('/dashboard/observability')}>
                   View All
                 </Button>
               </div>
@@ -367,12 +412,12 @@ export default function DashboardPage() {
                   <>
                     {recentActivity.map((activity) => (
                       <div key={activity.id} className="flex items-start gap-3 pb-4 border-b border-border/50 last:border-0 last:pb-0">
-                        <div className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
+                        <div className={`w-2 h-2 rounded-full ${activity.method === "POST" ? "bg-green-500" : activity.method === "GET" ? "bg-blue-500" : activity.method === "PUT" ? "bg-yellow-500" : activity.method === "DELETE" ? "bg-red-500" : "bg-primary"} mt-2 flex-shrink-0`} />
                         <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium">{activity.title}</p>
-                          <p className="text-xs text-muted-foreground">{activity.description}</p>
+                          <p className="text-sm font-medium">{activity.endpoint}</p>
+                          <p className={`font-bold font-mono text-[10px] ${getMethodColor(activity.method)}`}>{activity.method}</p>
                         </div>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">{activity.time}</span>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">{activity.timestamp}</span>
                       </div>
                     ))}
                   </>
@@ -391,10 +436,10 @@ export default function DashboardPage() {
                       <span className="font-mono text-primary">{systemStatus.apiResponseTime}</span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-primary to-secondary rounded-full" 
-                        style={{ 
-                          width: `${Math.min(100, Math.max(10, parseInt(systemStatus.apiResponseTime) || 0))}%` 
+                      <div
+                        className="h-full bg-gradient-to-r from-primary to-secondary rounded-full"
+                        style={{
+                          width: `${Math.min(100, Math.max(10, parseInt(systemStatus.apiResponseTime) || 0))}%`
                         }}
                       />
                     </div>
@@ -406,8 +451,8 @@ export default function DashboardPage() {
                       <span className="font-mono text-secondary">{systemStatus.storageUsed}</span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-secondary to-accent rounded-full" 
+                      <div
+                        className="h-full bg-gradient-to-r from-secondary to-accent rounded-full"
                         style={{ width: `${Math.min(100, systemStatus.storagePercentage)}%` }}
                       />
                     </div>
@@ -419,8 +464,8 @@ export default function DashboardPage() {
                       <span className="font-mono text-accent">{systemStatus.activeConnections}</span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-accent to-chart-4 rounded-full" 
+                      <div
+                        className="h-full bg-gradient-to-r from-accent to-chart-4 rounded-full"
                         style={{ width: `${Math.min(100, systemStatus.connectionsPercentage)}%` }}
                       />
                     </div>

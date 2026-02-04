@@ -627,6 +627,33 @@ interface ResourceUsageDataPoint {
   network: number;
 }
 
+export interface LogEntry {
+  id: number;
+  request_id: string;
+  method: string;
+  endpoint: string;
+  payload?: any;
+  response_status: number;
+  latency_ms: number;
+  user_id?: string;
+  user_role?: string;
+  source: string;
+  environment: string;
+  timestamp: string;
+}
+
+export interface ObservabilityStats {
+  total_requests_5m: number;
+  total_requests_1h: number;
+  total_requests_24h: number;
+  success_rate: number;
+  avg_latency: number;
+  p95_latency: number;
+  error_count: number;
+  active_users: number;
+  health_status: 'healthy' | 'degraded' | 'critical';
+}
+
 // Define the signup response interface
 export interface SignupResponse {
   token: string;
@@ -762,7 +789,16 @@ export default class ApiClient {
       method: "POST",
     })
   }
-
+  async delete_api_key(): Promise<ApiResponse<{ api_key: string }>> {
+    return this.request<{ api_key: string }>("/api/v1/auths/api_key", {
+      method: "DELETE",
+    })
+  }
+  async get_api_key(): Promise<ApiResponse<{ api_key: string }>> {
+    return this.request<{ api_key: string }>("/api/v1/auths/api_key", {
+      method: "GET",
+    })
+  }
 
 
   async logout(): Promise<ApiResponse<void>> {
@@ -1928,6 +1964,30 @@ export default class ApiClient {
     return this.request<IntegrationResponse[]>(`/api/v1/integrations/`, {
       method: "GET",
     });
+  }
+
+  // Observability
+  async getLogs(params: {
+    skip?: number;
+    limit?: number;
+    method?: string;
+    status?: number;
+    endpoint?: string;
+    user_id?: string;
+  } = {}): Promise<ApiResponse<LogEntry[]>> {
+    const query = new URLSearchParams();
+    if (params.skip !== undefined) query.append("skip", params.skip.toString());
+    if (params.limit !== undefined) query.append("limit", params.limit.toString());
+    if (params.method) query.append("method", params.method);
+    if (params.status) query.append("status", params.status.toString());
+    if (params.endpoint) query.append("endpoint", params.endpoint);
+    if (params.user_id) query.append("user_id", params.user_id);
+
+    return this.request<LogEntry[]>(`/api/v1/observability/logs?${query.toString()}`);
+  }
+
+  async getObservabilityStats(): Promise<ApiResponse<ObservabilityStats>> {
+    return this.request<ObservabilityStats>("/api/v1/observability/stats");
   }
 }
 
